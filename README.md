@@ -15,7 +15,7 @@ Install required perl modules:
   cpan install Spreadsheet::ParseXLSX
   ```
 
-Download mmexutil, make it executable, and add it into your path.
+Download `mmexutil`, make it executable, and add it into your path.
 
 ## Usage
 
@@ -59,7 +59,10 @@ Import `test1.xlsx` to `test2.mmb`
   ```
 
 The input (`-i`) command imports data from an XLSX file into the MMEX database, by
-(1) adding new records, (2) updating existing records, and (3) adding required records.
+1. adding new records
+2. updating existing records
+3. adding required records
+
 (2) and (3) can be performed only on tables with identifiable records,
 i.e., on tables with a key, other than the rowid.
 The database ids are abstracted; even if they are present
