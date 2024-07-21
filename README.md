@@ -79,7 +79,7 @@ is aborted. The assumed keys can be disabled with the `-ku` flag,
 in which case all XLSX entries are added as new (possibly duplicate) records
 in tables without a key.
 
-two important tables do not have a key (either unique or non-unique):
+Two important tables do not have a key (either unique or non-unique):
 - `CHECKINGACCOUNT_V1` (transactions)
 - `BILLSDEPOSITS_V1` (scheduled transactions)
 
