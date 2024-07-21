@@ -1,0 +1,6479 @@
+#!/usr/bin/env perl
+# vim: tw=96:tw=0:ts=2:sw=2:expandtab:foldmethod=marker
+# {{{ changelog
+
+# * 2024-07-21: George Ef <george.a.ef@gmail.com>
+#   created version 1.0.0.
+
+# }}}
+# {{{ licence (BSD 3-clause)
+
+# Copyright (c) 2024, georgeef
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# * Redistributions of source code must retain the above copyright notice, this
+#   list of conditions and the following disclaimer.
+#
+# * Redistributions in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
+#
+# * Neither the name of the copyright holder nor the names of its
+#   contributors may be used to endorse or promote products derived from
+#   this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+# }}}
+# {{{ note
+# {{{ 2024-05-15: MMEX (.mmb) database schema
+# see: MMEX 1.8.0 src/db/sql_tables.sql
+# {{{ INFOTABLE_V1
+
+# INFOID    INTEGER NOT NULL PRIMARY KEY
+# INFONAME  TEXT    COLLATE NOCASE NOT NULL UNIQUE
+# INFOVALUE TEXT    NOT NULL
+
+# }}}
+# {{{ CURRENCYFORMATS_V1
+
+# CURRENCYID      INTEGER PRIMARY KEY
+# CURRENCYNAME    TEXT    COLLATE NOCASE NOT NULL UNIQUE
+# PFX_SYMBOL      TEXT
+# SFX_SYMBOL      TEXT
+# DECIMAL_POINT   TEXT
+# GROUP_SEPARATOR TEXT
+# UNIT_NAME       TEXT    COLLATE NOCASE
+# CENT_NAME       TEXT    COLLATE NOCASE
+# SCALE           INTEGER
+# BASECONVRATE    NUMERIC
+# CURRENCY_SYMBOL TEXT    COLLATE NOCASE NOT NULL UNIQUE
+# CURRENCY_TYPE   TEXT    NOT NULL (Fiat, Crypto)
+
+# }}}
+# {{{ CURRENCYHISTORY_V1 (CURRENCYFORMATS_V1)
+
+# CURRHISTID  INTEGER PRIMARY KEY
+# CURRENCYID  INTEGER NOT NULL [ref: > CURRENCYFORMATS_V1.CURRENCYID]
+# CURRDATE    TEXT    NOT NULL
+# CURRVALUE   NUMERIC NOT NULL
+# CURRUPDTYPE INTEGER
+
+# UNIQUE(CURRENCYID, CURRDATE)
+
+# }}}
+# {{{ ACCOUNTLIST_V1 (CURRENCYFORMATS_V1)
+
+# ACCOUNTID       INTEGER PRIMARY KEY
+# ACCOUNTNAME     TEXT    COLLATE NOCASE NOT NULL UNIQUE
+# ACCOUNTTYPE     TEXT    NOT NULL (Checking, Term, Investment, Credit Card)
+# ACCOUNTNUM      TEXT
+# STATUS          TEXT    NOT NULL (Open, Closed)
+# NOTES           TEXT
+# HELDAT          TEXT
+# WEBSITE         TEXT
+# CONTACTINFO     TEXT
+# ACCESSINFO      TEXT
+# INITIALDATE     TEXT
+# INITIALBAL      NUMERIC
+# FAVORITEACCT    TEXT    NOT NULL
+# CURRENCYID      INTEGER NOT NULL [ref: > CURRENCYFORMATS_V1.CURRENCYID]
+# STATEMENTLOCKED INTEGER
+# STATEMENTDATE   TEXT
+# MINIMUMBALANCE  NUMERIC
+# CREDITLIMIT     NUMERIC
+# INTERESTRATE    NUMERIC
+# PAYMENTDUEDATE  TEXT
+# MINIMUMPAYMENT  NUMERIC
+
+# }}}
+# {{{ ASSETS_V1 (CURRENCYFORMATS_V1)
+
+# ASSETID         INTEGER PRIMARY KEY
+# STARTDATE       TEXT    NOT NULL
+# ASSETNAME       TEXT    COLLATE NOCASE NOT NULL
+# ASSETSTATUS     TEXT    (Open, Closed)
+# CURRENCYID      INTEGER [ref: > CURRENCYFORMATS_V1.CURRENCYID]
+# VALUECHANGEMODE TEXT    (Percentage, Linear)
+# VALUE           NUMERIC
+# VALUECHANGE     TEXT    (None, Appreciates, Depreciates)
+# NOTES           TEXT
+# VALUECHANGERATE NUMERIC
+# ASSETTYPE       TEXT    (Property, Automobile, Household Object, Art, Jewellery, Cash, Other)
+
+# }}}
+# {{{ STOCK_V1 (ACCOUNTLIST_V1, STOCKHISTORY_V1)
+
+# STOCKID       INTEGER PRIMARY KEY
+# HELDAT        INTEGER [ref: > ACCOUNTLIST_V1.ACCOUNTID]
+# PURCHASEDATE  TEXT    NOT NULL
+# STOCKNAME     TEXT    COLLATE NOCASE NOT NULL
+# SYMBOL        TEXT    [ref: <> STOCKHISTORY_V1.SYMBOL]
+# NUMSHARES     NUMERIC
+# PURCHASEPRICE NUMERIC NOT NULL
+# NOTES         TEXT
+# CURRENTPRICE  NUMERIC NOT NULL
+# VALUE         NUMERIC
+# COMMISSION    NUMERIC
+
+# }}}
+# {{{ STOCKHISTORY_V1 (STOCK_V1)
+
+# HISTID  INTEGER PRIMARY KEY
+# SYMBOL  TEXT    NOT NULL
+# DATE    TEXT    NOT NULL
+# VALUE   NUMERIC NOT NULL
+# UPDTYPE INTEGER
+
+# UNIQUE(SYMBOL, DATE)
+
+# }}}
+# {{{ CATEGORY_V1 (CATEGORY_V1)
+
+# CATEGID   INTEGER PRIMARY KEY
+# CATEGNAME TEXT    NOT NULL COLLATE NOCASE
+# ACTIVE    INTEGER
+# PARENTID  INTEGER [ref: > CATEGORY_V1.CATEGID]
+
+# UNIQUE(CATEGNAME, PARENTID)
+
+# }}}
+# {{{ PAYEE_V1 (CATEGORY_V1)
+
+# PAYEEID   INTEGER PRIMARY KEY
+# PAYEENAME TEXT    COLLATE NOCASE NOT NULL UNIQUE
+# CATEGID   INTEGER [ref: > CATEGORY_V1.CATEGID]
+# NUMBER    TEXT
+# WEBSITE   TEXT
+# NOTES     TEXT
+# ACTIVE    INTEGER
+# PATTERN   TEXT    DEFAULT ''
+
+# }}}
+# {{{ TAG_V1
+
+# TAGID   INTEGER PRIMARY KEY
+# TAGNAME TEXT    COLLATE NOCASE NOT NULL UNIQUE
+# ACTIVE  INTEGER
+
+# }}}
+# {{{ CUSTOMFIELD_V1
+
+# FIELDID     INTEGER NOT NULL PRIMARY KEY
+# REFTYPE     TEXT    NOT NULL (Transaction, Stock, Asset, ...)
+# DESCRIPTION TEXT    COLLATE NOCASE
+# TYPE        TEXT    NOT NULL (String, Integer, Decimal, ...)
+# PROPERTIES  TEXT    NOT NULL
+
+# }}}
+# {{{ CHECKINGACCOUNT_V1 (ACCOUNTLIST_V1, CATEGORY_V1, PAYEE_V1)
+
+# TRANSID           INTEGER PRIMARY KEY
+# ACCOUNTID         INTEGER NOT NULL [ref: > ACCOUNTLIST_V1.ACCOUNTID]
+# TOACCOUNTID       INTEGER [ref: > ACCOUNTLIST_V1.ACCOUNTID]
+# PAYEEID           INTEGER NOT NULL [ref: > PAYEE_V1.PAYEEID]
+# TRANSCODE         TEXT    NOT NULL (Withdrawal, Deposit, Transfer)
+# TRANSAMOUNT       NUMERIC NOT NULL
+# STATUS            TEXT    (None, Reconciled, Void, Follow up, Duplicate)
+# TRANSACTIONNUMBER TEXT
+# NOTES             TEXT
+# CATEGID           INTEGER [ref: > CATEGORY_V1.CATEGID]
+# TRANSDATE         TEXT
+# LASTUPDATEDTIME   TEXT
+# DELETEDTIME       TEXT
+# FOLLOWUPID        INTEGER
+# TOTRANSAMOUNT     NUMERIC
+# COLOR             INTEGER DEFAULT -1
+
+# }}}
+# {{{ SPLITTRANSACTIONS_V1 (CATEGORY_V1, CHECKINGACCOUNT_V1)
+
+# SPLITTRANSID     INTEGER PRIMARY KEY
+# TRANSID          INTEGER NOT NULL [ref: > CHECKINGACCOUNT_V1.TRANSID]
+# CATEGID          INTEGER [ref: > CATEGORY_V1.CATEGID]
+# SPLITTRANSAMOUNT NUMERIC
+# NOTES            TEXT
+
+# }}}
+# {{{ TRANSLINK_V1 (ASSETS_V1, STOCK_V1, CHECKINGACCOUNT_V1)
+
+# TRANSLINKID       INTEGER NOT NULL PRIMARY KEY
+# CHECKINGACCOUNTID INTEGER NOT NULL [ref: > CHECKINGACCOUNT_V1.TRANSID]
+# LINKTYPE          TEXT    NOT NULL (Asset, Stock)
+# LINKRECORDID      INTEGER NOT NULL [
+#   ref: > ASSETS_V1.ASSETID,
+#   ref: > STOCK_V1.STOCKID,
+# ]
+
+# }}}
+# {{{ SHAREINFO_V1 (CHECKINGACCOUNT_V1)
+
+# SHAREINFOID       INTEGER NOT NULL PRIMARY KEY
+# CHECKINGACCOUNTID INTEGER NOT NULL [ref: > CHECKINGACCOUNT_V1.TRANSID]
+# SHARENUMBER       NUMERIC
+# SHAREPRICE        NUMERIC
+# SHARECOMMISSION   NUMERIC
+# SHARELOT          TEXT
+
+# }}}
+# {{{ BILLSDEPOSITS_V1 (ACCOUNTLIST_V1, CATEGORY_V1, PAYEE_V1)
+
+# BDID               INTEGER PRIMARY KEY
+# ACCOUNTID          INTEGER NOT NULL [ref: > ACCOUNTLIST_V1.ACCOUNTID]
+# TOACCOUNTID        INTEGER [ref: > ACCOUNTLIST_V1.ACCOUNTID]
+# PAYEEID            INTEGER NOT NULL [ref: > PAYEE_V1.PAYEEID]
+# TRANSCODE          TEXT    NOT NULL (Withdrawal, Deposit, Transfer)
+# TRANSAMOUNT        NUMERIC NOT NULL
+# STATUS             TEXT    (None, Reconciled, Void, Follow up, Duplicate)
+# TRANSACTIONNUMBER  TEXT
+# NOTES              TEXT
+# CATEGID            INTEGER [ref: > CATEGORY_V1.CATEGID]
+# TRANSDATE          TEXT
+# FOLLOWUPID         INTEGER
+# TOTRANSAMOUNT      NUMERIC
+# REPEATS            INTEGER
+# NEXTOCCURRENCEDATE TEXT
+# NUMOCCURRENCES     INTEGER
+# COLOR              INTEGER DEFAULT -1
+
+# }}}
+# {{{ BUDGETSPLITTRANSACTIONS_V1 (CATEGORY_V1, BILLSDEPOSITS_V1)
+
+# SPLITTRANSID     INTEGER PRIMARY KEY
+# TRANSID          INTEGER NOT NULL [ref: > BILLSDEPOSITS_V1.BDID]
+# CATEGID          INTEGER [ref: > CATEGORY_V1.CATEGID]
+# SPLITTRANSAMOUNT NUMERIC
+# NOTES            TEXT
+
+# }}}
+# {{{ TAGLINK_V1 (CHECKINGACCOUNT_V1, SPLITTRANSACTIONS_V1, BILLSDEPOSITS_V1, BUDGETSPLITTRANSACTIONS_V1, TAG_V1)
+
+# TAGLINKID INTEGER PRIMARY KEY
+# REFTYPE   TEXT    NOT NULL (
+#   Transaction, TransactionSplit, RecurringTransaction, RecurringTransactionSplit
+# )
+# REFID INTEGER NOT NULL [
+#   ref: > CHECKINGACCOUNT_V1.TRANSID,
+#   ref: > SPLITTRANSACTIONS_V1.SPLITTRANSID,
+#   ref: > BILLSDEPOSITS_V1.BDID,
+#   ref: > BUDGETSPLITTRANSACTIONS_V1.SPLITTRANSID,
+# ]
+# TAGID INTEGER NOT NULL [ref: > TAG_V1.TAGID]
+
+# FOREIGN KEY (TAGID) REFERENCES TAG_V1 (TAGID)
+# UNIQUE(REFTYPE, REFID, TAGID)
+
+# }}}
+# {{{ CUSTOMFIELDDATA_V1 (CUSTOMFIELD_V1, CHECKINGACCOUNT_V1, BILLSDEPOSITS_V1)
+
+# FIELDATADID INTEGER NOT NULL PRIMARY KEY
+# REFID       INTEGER NOT NULL [
+#   ref: > CHECKINGACCOUNT_V1.TRANSID,  (REFID = + CHECKINGACCOUNT_V1.TRANSID)
+#   ref: > BILLSDEPOSITS_V1.BDID,       (REFID = - BILLSDEPOSITS_V1.BDID)
+# ]
+# FIELDID     INTEGER NOT NULL [ref: > CUSTOMFIELD_V1.FIELDID]
+# CONTENT     TEXT
+
+# UNIQUE(FIELDID, REFID)
+
+# }}}
+# {{{ ATTACHMENT_V1 (ACCOUNTLIST_V1, ASSETS_V1, STOCK_V1, PAYEE_V1, CHECKINGACCOUNT_V1, BILLSDEPOSITS_V1)
+
+# ATTACHMENTID INTEGER NOT NULL PRIMARY KEY
+# REFTYPE TEXT    NOT NULL (BankAccount, Asset, Stock, Payee, Transaction, RecurringTransaction)
+# REFID   INTEGER NOT NULL [
+#   ref: > ACCOUNTLIST_V1.ACCOUNTID,
+#   ref: > ASSETS_V1.ASSETID,
+#   ref: > STOCK_V1.STOCKID,
+#   ref: > PAYEE_V1.PAYEEID,
+#   ref: > CHECKINGACCOUNT_V1.TRANSID,
+#   ref: > BILLSDEPOSITS_V1.BDID,
+# ]
+# DESCRIPTION TEXT COLLATE NOCASE
+# FILENAME    TEXT NOT NULL COLLATE NOCASE
+
+# }}}
+# {{{ BUDGETYEAR_V1 ->
+
+# BUDGETYEARID   INTEGER PRIMARY KEY
+# BUDGETYEARNAME TEXT    NOT NULL UNIQUE
+
+# }}}
+# {{{ BUDGETTABLE_V1 (CATEGORY_V1, BUDGETYEAR_V1)
+
+# BUDGETENTRYID INTEGER PRIMARY KEY
+# BUDGETYEARID  INTEGER [ref: > BUDGETYEAR_V1.BUDGETYEARID]
+# CATEGID       INTEGER [ref: > CATEGORY_V1.CATEGID]
+# PERIOD        TEXT    NOT NULL (None, Weekly, Bi-Weekly, Monthly, ...)
+# AMOUNT        NUMERIC NOT NULL
+# NOTES         TEXT
+# ACTIVE        INTEGER
+
+# }}}
+# {{{ REPORT_V1
+
+# REPORTID        INTEGER NOT NULL PRIMARY KEY
+# REPORTNAME      TEXT    COLLATE NOCASE NOT NULL UNIQUE
+# GROUPNAME       TEXT    COLLATE NOCASE
+# ACTIVE          INTEGER
+# SQLCONTENT      TEXT
+# LUACONTENT      TEXT
+# TEMPLATECONTENT TEXT
+# DESCRIPTION     TEXT
+
+# }}}
+# }}}
+# {{{ 2024-07-21: program version
+
+# the program version is of the form $N$B.$I.$D, where
+# $N (no version)     : "" (empty), "n", "N"
+# $B (behavior)       : (integer) indicates features, formats, usage interface
+# $I (implementation) : (integer) indicates code changes, bugfixes
+# $D (dependencies)   : (integer) indicates the versions of used modules
+
+# the $B version number MUST be increased when the program behavior is changed,
+# e.g., important features are added/removed, or input/output formats are changed,
+# or the usage interface (command-line syntax) is broken. it MAY stay the same for
+# minor changes in program behavior, but in this case either the $I number must
+# be increased, or an $N flag must be added.
+
+# the $I version number MUST be increased when the program implementation is changed,
+# either without (significant) changes in behavior, or in order to fix wrong behavior.
+# in the latter case, the actual program behavior is changed (maybe significantly),
+# but the intended (documented) behavior does not change. the $I number MAY stay the
+# same for minor implementation changes, but in this case an $N flag must be added.
+
+# the $D version number MUST be increased when the version of a used module is changed,
+# without any other (significant) change in program code, e.g., after the program
+# has been tested with the latest module versions. a new D release may also contain
+# minor implementation changes, but in general the $D number is tracking changes
+# in used modules, not changes in the program itself.
+
+# notice that a specific program version uses specific module versions, not just the
+# installed or the latest module versions. a change of used module versions may result
+# in a change of program behavior or execution time.
+
+# lower-rank version numbers SHOULD be reset to 0, when a higher-rank number
+# is increased, e.g., $D should be reset to 0 when $I is increased.
+
+# the $N flag, if present, means "no version". it is added in front of a version
+# when the program of this version is changed in any way (behavior, implementation,
+# dependency version), but the author does not bother to register a new version.
+# if the program date is not updated, an $N flag MUST be added also in front of it.
+# n$B.$I.$D (pronounced: not $B.$I.$D) may mean anything from "version $B.$I.$D with
+# too little changes to deserve a new version", to "version $B.$I.$D with experimental
+# changes, in preparation for the next I or B release" (in the latter case a "p"
+# flag may be better, e.g., p$B.$I.$D may predate the future version $B.$I.$D).
+# from a user's perspective, the $N flag means "dirty flag", i.e., N versions should
+# be avoided; for this puropse, it is placed in front rather than at the end.
+
+# package maintainers may need to adapt the program for compliance or consistency
+# with their repository. if they change a depencency version and they cannot
+# register a new D version, they SHOULD add an additional suffix (e.g., "-$S"),
+# since the modified program may have different behavior or execution time.
+# for minor modifications, they MAY keep the version without additional suffix,
+# as long as nothing has been changed in program bahavior and execution time.
+# if in doubt, they can always add a suffix.
+
+# }}}
+# }}}
+
+# {{{ use
+
+use strict;
+use open qw( :std :encoding(UTF-8) );
+
+# standard modules without version
+use File::Basename qw( dirname basename );
+
+# modules with version
+use DBI 1.63 qw();
+use Excel::Writer::XLSX 1.12 qw();
+use Spreadsheet::ParseXLSX 0.35 qw();
+
+# }}}
+# {{{ const
+
+# if you edit this file, add a prefix "n" in front of the version number and
+# in front of the version date (see the note "program version" above).
+
+my $prog_name    = "mmexutil";
+my $prog_version = "1.0.0 (2024-07-21)";
+
+# }}}
+# {{{ var
+
+# {{{ program file
+
+# the program file ($prog_file) may be different than the program name ($prog_name).
+# both are used in messages (hopefully not in a confusing way).
+
+# }}}
+my $prog_file = basename( $0 );
+
+# program/command flags
+my $dry_run      = 0;  # (boolean) dry run
+my $warn_level   = 1;  # warn  messages (0: none, 1: main, 2: repeated,  >2: hidden)
+my $info_level   = 0;  # info  messages (0: none, 1: main, 2: detailed,  >2: hidden)
+my $debug_level  = 0;  # debug messages (0: none, 1: main, 2: temporary, >2: old)
+
+# undocumented flags
+my $debug_query  = 0;  # (boolean) explain database queries
+
+# program state
+my $cmd = "";          # (string) current command name
+
+# }}}
+
+# {{{ log
+# {{{ note
+# {{{ introduction
+
+# a fold is the content between an open marker and the corresponding close marker.
+# the open and close markers are balanced (like parenthesis in expressions).
+# the marker strings should not be used in log messages (otherwise the log output
+# is ambiguous).
+
+# folds are used in order to organize log messages in a tree structure. short common
+# information can be factored out and printed as a label, together with the open marker.
+# as an example, consider log messages which report errors during the processing of
+# several input files. a higher-level function can open a fold when it opens a file,
+# adding the file name in the label, and close the fold when it closes the file. the
+# lower-level functions can print log messages without mentioning the file name, since
+# all messages for the same file are grouped together inside a fold, which contains the
+# file name in its label. therefore, the file name does not need to be transferred from
+# higher-level to lower-level functions, or to be communicated through global variables.
+
+# if a fold is empty, i.e., it does not contain any log messages, the fold markers and
+# the label do not provide useful information and they are stripped. in particular, if
+# the program execution does not produce any log messages, the log output is empty. the
+# functions in this module suppress empty folds, by delaying the print of open markers;
+# the fold open function pushes the fold label into a stack, instead of printing an open
+# marker immediately. the log functions print (flush) all pending open markers and labels,
+# before they print the log message. the fold close function removes the last label from
+# the stack, if it is still pending, or prints a close marker otherwise. therefore, empty
+# folds are eliminated recursively.
+
+# the lazy printing of open markers described above, minimizes the log output and also
+# simplifies programming. a higher-level function can always open a fold, without knowing
+# if there will be log messages inside it or not.
+
+# a lazy algorithm, integrated into the functions in this module, is used also for the
+# separation of log messages with an empty line. the separation function registers the
+# request, but it doesn't print an empty line immediately. depending on the context,
+# the separation is either printed later, or it is eliminated (see details below).
+
+# }}}
+# {{{ usage
+
+# the application can call the following functions in any order
+#   log_open($label)   : open fold with $label
+#   log_close()        : close fold
+#   log_sep()          : add separation (empty line)
+#   log_error($x), ... : print functions with separation
+#   log_plain($x), ... : print functions without separation
+# with the restriction that log_open() and log_close() calls are balanced; in particular,
+# the number of log_close() calls is the same as the number of log_open() calls.
+
+# functional behavior:
+# empty folds are eliminated; an empty fold is a balanced log_open/close(), which
+# may contain (recursively) empty folds and log_sep(), but not any log_error/plain().
+# two or more consecutive log_sep() are reduced to a single log_sep(). if the log output
+# contains only a log_sep(), the latter is eliminated.
+
+# separation level:
+# an empty line is always printed before and after an error message (also between two
+# error messages), in order to emphasize error messages in the log output. the printing
+# of log_sep() is controlled by the parameter $log_sep_l, with a value between 0 and 4
+# (the default value is 2), as follows:
+#   $log_sep_l | print separation between
+#   -----------+-------------------------
+#              | log_close/plain() and log_open/plain()
+#      >= 1    | log_close/plain() and log_close()
+#      >= 2    | log_open()        and log_open/plain()
+#      >= 3    | log_close/plain() and end
+#         4    | begin             and log_open/plain()
+# at separation level 0, only log_sep() between log_close/plain() and log_open/plain()
+# are printed. at separation level 2, all log_sep() are printed except at the beginning
+# or at the end of execution. at separation level 4, all log_sep() are printed. notice that
+# according to the balance and elimination rules above, log_sep() cannot appear between:
+#   begin      and end         | has been eliminated
+#   begin      and log_close() | log_close() is not balanced
+#   log_open() and end         | log_open() is not balanced
+#   log_open() and log_close() | has been eliminated as an empty fold
+
+# }}}
+# {{{ implementation
+
+# all log functions write to STDERR, in order to avoid an additional output stream
+# argument in function calls. if needed, their code can be copied and modified to
+# support other output streams.
+
+# the fold markers (@log_fold_markers) are the same as those used in vim, in order to
+# make editing of the log output (with vim) easier.
+
+# state variables:
+#   $log_fold_n : number of flushed open folds
+#   @log_fold_a : ( [ $sep_f, $label ], ... ) pending open folds
+#   $log_sep_s  : separation state (0: begin, 1: open, 2: close, 3: plain, 4: error)
+#   $log_sep_f  : separation flag
+# the number of open (not yet closed) folds is $log_fold_n + scalar(@log_fold_a).
+# $log_fold_a[$i] contains the value of $log_sep_f at the time of $i-th pending
+# log_open(), and the label of $i-th pending log_open().
+# $log_sep_s indicates the last flushed item; it is 0 only at the beginning of execution,
+# and 1 only temporarily, during flushing of pending open folds.
+# $log_sep_f indicates the separation state after the last (flushed or pending) item;
+# it is set to 1 by log_sep() and by error functions.
+
+# log_close/quit() use $log_fold_n in order to check the balance of log_open/close().
+# log_open/sep() update @log_fold_a, $log_sep_f; they do not print anything immediately.
+# a separation (indicated by $log_sep_f) is printed or suppressed, depending on $log_sep_l
+# (the separation level), $log_sep_s (the last flushed item), and the current item to be
+# flushed (see usage above).
+
+# the helper function log_flush($e) flushes all pending open folds. it is used in the
+# following print functions:
+#   log_fatal/error/warn()       : with $e=1
+#   log_info/ninfo/debug/plain() : with $e=0
+# the boolean argument $e indicates if the following message is an error message.
+# application code that prints a message to STDERR directly, must call log_flush()
+# before print STDERR; see the implementation of log_plain().
+
+# additional information is printed with the following auxiliary print functions:
+#   log_*f($x) : function name of the caller function
+#   log_*l($x) : the line number in $log_line_n
+# the line number in $log_line_n must be set by higher level functions, e.g., the
+# funciton which reads lines from an input file, after which intermediate functions
+# can call log_*l() without the need to pass the line number as an argument.
+
+# }}}
+# }}}
+# {{{ const
+
+# fold open and close markers
+my @log_fold_markers = ( "{{{", "}}}" );
+
+# separation level
+my $log_sep_l = 2;
+
+# }}}
+# {{{ var
+
+# line number
+my $log_line_n = 0;
+
+# state variables with initial values
+my $log_fold_n = 0;   # number of flushed open folds
+my @log_fold_a = ();  # ( [ $sep_f, $label ], ... ) pending open folds
+my $log_sep_s = 0;    # separation state (0: begin, 1: open, 2: close, 3: plain, 4: error)
+my $log_sep_f = 0;    # separation flag
+
+# }}}
+
+# {{{ sub log_callerf( $d=0 ) -> $package::$sub
+# $d : caller depth
+
+sub log_callerf { my( $d ) = @_;
+  $d = 0 unless defined $d;
+  return ( caller( 1+$d ) )[3];
+}
+
+# }}}
+# {{{ sub log_open( $x="" )
+# open fold with label $x
+
+sub log_open { my( $x ) = @_;
+  $x = "" unless defined $x;
+  push( @log_fold_a, [ $log_sep_f, $x ] );
+  $log_sep_f = 0;
+}
+
+sub log_openl { my( $x ) = @_;
+  log_open( "line $log_line_n" . ( $x ne "" ? ": $x" : "" ) );
+}
+
+# }}}
+# {{{ sub log_close()
+# close fold
+
+my $log_cnt_empty = 3;
+
+sub log_close {
+  # {{{ if there is a pending open fold close it
+
+  if( @log_fold_a > 0 ) {
+    # restore $log_sep_f
+    $log_sep_f = $log_fold_a[-1]->[0];
+    pop( @log_fold_a );
+  }
+
+  # }}}
+  # {{{ if there is a flushed open fold close it
+
+  elsif( $log_fold_n > 0 ) {
+    # print separation
+    if( $log_sep_f ) {
+      if( $log_sep_s == 4 || ( $log_sep_s >= 2 && $log_sep_l >= 1 ) ) {
+        print STDERR "\n";
+      }
+    }
+
+    # print close marker
+    print STDERR $log_fold_markers[1] if $log_fold_markers[1] ne '';
+    print STDERR "\n";
+
+    # update state
+    $log_fold_n -= 1;
+    $log_sep_s = 2;
+    $log_sep_f = 0;
+  }
+
+  # }}}
+  # {{{ otherwise print error
+
+  elsif( $log_cnt_empty > 0 ) {
+    print STDERR "\nERROR: " . log_callerf(1) .
+      ": log_close() without matching log_open().\n";
+    $log_cnt_empty--;
+    if( $log_cnt_empty == 0 ) {
+      print STDERR "\nWARNING: " . log_callerf(0) .
+        ": the previous message will not be printed again.\n";
+    }
+    $log_sep_s = 4;
+    $log_sep_f = 1;
+  }
+
+  # }}}
+}
+
+# }}}
+# {{{ sub log_sep()
+# add separation
+
+sub log_sep {
+  $log_sep_f = 1;
+}
+
+# }}}
+# {{{ sub log_flush( $e=0 )
+# flush all pending open folds
+# if $e, then add separation before and after the next message
+
+sub log_flush { my( $e ) = @_;
+  $e = 0 unless defined $e;
+  # {{{ flush all pending open folds
+
+  my $marker = $log_fold_markers[0];
+
+  while( @log_fold_a > 0 ) {
+    # print separation
+    if( $log_fold_a[0]->[0] ) {
+      if( $log_sep_s >= 2 ||
+        ( $log_sep_s == 1 && $log_sep_l >= 2 ) ||
+        ( $log_sep_s == 0 && $log_sep_l >= 4 )
+      ) {
+        print STDERR "\n";
+      }
+    }
+
+    # print open marker and label
+    my $x = $log_fold_a[0]->[1];
+    # assertion: $marker ne '' || $x ne ''
+    print STDERR $marker if $marker ne '';
+    if( $x ne '' ) {
+      print STDERR " " if $marker ne '';
+      print STDERR $x;
+    }
+    print STDERR "\n";
+
+    # update state
+    $log_fold_n += 1;
+    shift( @log_fold_a );
+    $log_sep_s = 1;
+  }
+
+  # }}}
+  # {{{ print separation (before next message)
+
+  if( $e ) {
+    print STDERR "\n";
+  } elsif( $log_sep_f ) {
+    if( $log_sep_s >= 2 ||
+      ( $log_sep_s == 1 && $log_sep_l >= 2 ) ||
+      ( $log_sep_s == 0 && $log_sep_l >= 4 )
+    ) {
+      print STDERR "\n";
+    }
+  }
+
+  # }}}
+  # {{{ update state (after next message)
+
+  $log_sep_s = $e ? 4 : 3;
+  $log_sep_f = $e ? 1 : 0;
+
+  # }}}
+}
+
+# }}}
+
+# {{{ sub log_fatal( $x )
+# {{{ print fatal error message $x with separation
+
+# a fatal error message indicates an unacceptable input, which immediately terminates
+# the program. the message should help the user to locate and fix the error in the input.
+
+# calls to these functions must not be masked. they must be followed by cleanup and exit().
+
+# }}}
+
+sub log_fatal { my( $x ) = @_;
+  log_flush(1);
+  print STDERR "FATAL ERROR: " . $x;
+}
+
+sub log_fatall { my( $x ) = @_;
+  log_fatal( "line $log_line_n: " . $x );
+}
+
+# }}}
+# {{{ sub log_error( $x )
+# {{{ print error message $x with separation
+
+# an error message indicates an unacceptable input, which does not terminate the program.
+# although the program can ignore the error, or can recover from it, the output is likely
+# wrong. the message should help the user to locate and fix the error in the input.
+
+# calls to these function should not be masked.
+
+# }}}
+
+sub log_error { my( $x ) = @_;
+  log_flush(1);
+  print STDERR "ERROR: " . $x;
+}
+
+sub log_errorl { my( $x ) = @_;
+  log_error( "line $log_line_n: " . $x );
+}
+
+# }}}
+# {{{ sub log_check( $x )
+# {{{ print check message $x
+
+# a check message indicates a programming error, which may terminate the program. the
+# message describes the failed assertion, using coding names (function names, variable
+# names, etc.). it should help the programmer to locate the error.
+
+# calls to these function should not be masked. they may be followed by cleanup and exit().
+
+# log_checkf() is preferable to log_check(), since it automatically provides a link
+# to the code that generated the message.
+
+# }}}
+
+sub log_check { my( $x ) = @_;
+  log_flush(1);
+  print STDERR "CHECK: " . $x;
+}
+
+sub log_checkf { my( $x ) = @_;
+  log_check( log_callerf(1) . $x );
+}
+
+sub log_checkl { my( $x ) = @_;
+  log_check( "line $log_line_n: " . $x );
+}
+
+# }}}
+# {{{ sub log_warn(  $x )
+# {{{ print warning message $x with separation
+
+# a warning message indicates a potential error in the input, e.g., when the input conforms
+# to a loose, but not to a strict, syntax or specs. the program does not need to perform
+# any recovery, other that accepting the input.
+
+# calls to these function may be masked by a flag or level selector.
+
+# }}}
+
+sub log_warn { my( $x ) = @_;
+  log_flush(1);
+  print STDERR "WARNING: " . $x;
+}
+
+sub log_warnl { my( $x ) = @_;
+  log_warn( "line $log_line_n: " . $x );
+}
+
+# }}}
+# {{{ sub log_info(  $x )
+# {{{ print info message $x
+
+# info messages give information about the program execution. they should contain names
+# which make sense to the user, rather than coding names which make sense only to the
+# programmer. info messages can be organized to provide informstion at different levels
+# of detail (e.g., the main steps at higher level, and detailed progress at lower level).
+
+# calls to these function are masked by a level selector ($info_level).
+
+# }}}
+
+sub log_info { my( $x ) = @_;
+  log_flush();
+  print STDERR "INFO: " . $x;
+}
+
+sub log_infol { my( $x ) = @_;
+  log_info( "line $log_line_n: " . $x );
+}
+
+# }}}
+# {{{ sub log_ninfo( $x )
+# {{{ print info or dry run message $x
+
+# these messages are like info messages, but with a different prefix when the program is
+# executed in dry run mode. they show the progress that actually happens or would happen.
+
+# }}}
+
+sub log_ninfo { my( $x ) = @_;
+  log_flush();
+  print STDERR ( $dry_run ? "DRY RUN: " : "INFO: " ) . $x;
+}
+
+sub log_ninfol { my( $x ) = @_;
+  log_ninfo( "line $log_line_n: " . $x );
+}
+
+# }}}
+# {{{ sub log_debug( $x )
+# {{{ print debug message $x
+
+# debug messages provide internal information useful only to the programmer. they are
+# usually activated during development or for the diagnosis of a problem.
+
+# calls to these function are masked by a level selector ($debug_level).
+
+# log_debugf() is preferable to log_debug(), since it automatically provides a link
+# to the code that generated the message.
+
+# }}}
+
+sub log_debug { my( $x ) = @_;
+  log_flush();
+  print STDERR "DEBUG: " . $x;
+}
+
+sub log_debugf { my( $x ) = @_;
+  log_debug( log_callerf(1) . $x );
+}
+
+sub log_debugl { my( $x ) = @_;
+  log_debug( "line $log_line_n: " . $x );
+}
+
+# }}}
+# {{{ sub log_plain( $x )
+# {{{ print plain message $x
+
+# plain messages do not indicate the type of the message. they can be used e.g., when
+# the predefined prefix in other log functions is not suitable, or as a continuation
+# of a previous message.
+
+# }}}
+
+sub log_plain { my( $x ) = @_;
+  log_flush();
+  print STDERR $x;
+}
+
+sub log_plainl { my( $x ) = @_;
+  log_flush();
+  print STDERR "line $log_line_n: " . $x;
+}
+
+# }}}
+
+# {{{ sub log_init()
+# called at the beginning of program execution
+
+sub log_init {
+  # state variables have been defined together with their initial values
+}
+
+# }}}
+# {{{ sub log_quit()
+# called at the end of program execution
+
+sub log_quit {
+  # {{{ flush pending open folds
+
+  my $m = $log_fold_n + scalar(@log_fold_a);
+  if( $m > 0 ) {
+    log_flush(1);
+    print STDERR "ERROR: " . log_callerf(1) .
+      ": there are $m open folds.\n";
+  }
+
+  # }}}
+  # {{{ close all open folds
+
+  while( $log_fold_n > 0 || @log_fold_a > 0 ) {
+    log_close();
+  }
+
+  # }}}
+  # {{{ print separation
+
+  if( $log_sep_f ) {
+    if( $log_sep_s == 4 || ( $log_sep_s >= 2 && $log_sep_l >= 3 ) ) {
+      print STDERR "\n";
+    }
+  }
+
+  # }}}
+}
+
+# }}}
+# }}}
+# {{{ mmex
+# {{{ const
+
+# supported MMEX version
+my $m_mmex_version = "1.8.0 (2024-04-29)";  # MMEX version
+my $m_data_version = "3";                   # found in INFOTABLE where INFONAME=DATAVERSION
+
+# {{{ database maps between id and key
+
+# %m_map_sh : ( $map => \@map_s )
+
+# $map     : (string) name of map between id and key
+# @map_s   : one of:
+#            ( 0: "table", 1: $collate, 2: $table, 3: $id, 4: $key_l, 5? $query )
+#            ( 0: "const", 1: $collate, 2: \%id_key )
+#            ( 0: "union", 1: [ $map, ... ] )
+# $collate : undef or sub( $key ) -> $normalized_key
+# $table   : (string) table name in MMEX database
+# $id      : (string) rowid name in MMEX table
+# $key_l   : (string) comma separated list of key names in MMEX table
+# $query   : (string) database query (default: select $id, $key_l from $table)
+# %id_key  : ( $id => $key ) constant map from id to key
+
+# %m_map_sh specifies the cache of MMEX database maps between id (rowid) and key name.
+# all maps are bi-directional. the map from id to key searches for the id in a cached
+# hash table, and returns the corresponding key, as stored in the MMEX database.
+# the inverse map (from key to id) normalizes the key using the $collate function
+# (if defined), searches for the normalized key in a cached hash table, and returns
+# the corresponding id. the $collate function for insensitive keys, decrared with
+# COLLATE NOCASE in the MMEX database, is "uc" (uppercase).
+
+# all keys are unique (declared with UNIQUE in the MMEX database) after collation,
+# i.e., each map is a one-to-one relationship between ids and normalized keys.
+# MMEX database ids are strictly positive integer numbers, although this restriction
+# is not enforced by the cache lookup functions. in dry run mode, new records are not
+# actually inserted into the database, therefore they have no rowid; they are inserted
+# into the cache, as a unidirectional map from key to the dummy id 0.
+
+# the maps from id to key are mostly used by the output function (-o) of this program,
+# while the maps from key to id are mostly used by the input function (-i).
+
+# }}}
+my %m_map_sh = (
+  # {{{ UPDATE
+
+  UPDATE => [ "const", undef, {
+    1 => "ONLINE",
+    2 => "MANUAL",
+  } ],
+
+  # }}}
+  # {{{ REPEATS_AUTO
+  # see: MMEX 1.8.0 src/./billsdepositsdialog.cpp
+
+  REPEATS_AUTO => [ "const", undef, {
+    0 => "",
+    1 => "UserAck",
+    2 => "Silent",
+  } ],
+
+  # }}}
+  # {{{ REPEATS_FREQ
+  # see: MMEX 1.8.0 src/./billsdepositsdialog.cpp
+
+  REPEATS_FREQ => [ "const", undef, {
+     0 => "None",
+     1 => "Weekly",
+     2 => "Fortnightly",
+     3 => "Monthly",
+     4 => "Every 2 Months",
+     5 => "Quarterly",
+     6 => "Half-Yearly",
+     7 => "Yearly",
+     8 => "Four Months",
+     9 => "Four Weeks",
+    10 => "Daily",
+    11 => "In (n) Days",
+    12 => "In (n) Months",
+    13 => "Every (n) Days",
+    14 => "Every (n) Months",
+    15 => "Monthly (last day)",
+    16 => "Monthly (last business day)",
+  } ],
+
+  # }}}
+  # {{{ CURRENCY
+
+  CURRENCY => [ "table", sub { uc($_[0]) },
+    "CURRENCYFORMATS_V1", "CURRENCYID", "CURRENCY_SYMBOL"
+  ],
+
+  # }}}
+  # {{{ ACCOUNT
+
+  ACCOUNT => [ "table", sub { uc($_[0]) },
+    "ACCOUNTLIST_V1", "ACCOUNTID", "ACCOUNTNAME"
+  ],
+
+  # }}}
+  # {{{ TO_ACCOUNT_AS
+  # see: MMEX 1.8.0 src/model/Model_Translink.h
+
+  TO_ACCOUNT_AS => [ "const", undef, {
+    32701 => ".AS_INCOME_EXPENSE",
+    32702 => ".AS_TRANSFER",
+  } ],
+
+  # }}}
+  # {{{ TO_ACCOUNT
+
+  TO_ACCOUNT => [ "union", [
+    "ACCOUNT", "TO_ACCOUNT_AS"
+  ] ],
+
+  # }}}
+  # {{{ CATEGORY
+
+  CATEGORY => [ "table", sub { uc($_[0]) },
+    "CATEGORY_V1", "CATEGID", "PARENTID, CATEGNAME",
+    "with recursive CATEGORY_PATH as (" .
+      "\n  select CATEGID, CATEGNAME as CATEGPATH" .
+      "\n  from CATEGORY_V1 where PARENTID = '-1'" .
+      "\n  union all" .
+      "\n  select c.CATEGID as CATEGID, cp.CATEGPATH || ':' || c.CATEGNAME as CATEGPATH" .
+      "\n  from CATEGORY_V1 c, CATEGORY_PATH cp" .
+      "\n  where c.PARENTID = cp.CATEGID" .
+    "\n) select CATEGID, CATEGPATH from CATEGORY_PATH"
+  ],
+
+  # }}}
+  # {{{ PAYEE
+
+  PAYEE => [ "table", sub { uc($_[0]) },
+    "PAYEE_V1", "PAYEEID", "PAYEENAME"
+  ],
+
+  # }}}
+  # {{{ TAG
+
+  TAG => [ "table", sub { uc($_[0]) },
+    "TAG_V1", "TAGID", "TAGNAME"
+  ],
+
+  # }}}
+  # {{{ YEAR
+
+  YEAR => [ "table", undef,
+    "BUDGETYEAR_V1", "BUDGETYEARID", "BUDGETYEARNAME"
+  ],
+
+  # }}}
+);
+# {{{ indexes
+
+my %m_map_table = ();  # ( $map => $table )
+my %m_table_map = ();  # ( $table => [ $map, ... ] )
+
+for my $map ( keys %m_map_sh ) {
+  my $map_s = $m_map_sh{$map};
+  if( $map_s->[0] eq "table" ) {
+    my $table = $map_s->[2];
+    $m_map_table{$map} = $table;
+    $m_table_map{$table} = [] unless exists $m_table_map{$table};
+    push( @{ $m_table_map{$table} }, $map );
+  } elsif( $map_s->[0] eq "union" ) {
+    my( $map1, $map1_s ) = ( $map, $map_s );
+    while( defined $map1_s && $map1_s->[0] eq "union" ) {
+      $map1 = $map1_s->[1]->[0];
+      $map1_s = $m_map_sh{$map1};
+    }
+    if( $map1_s->[0] eq "table" ) {
+      my $table = $map1_s->[2];
+      $m_map_table{$map} = $table;
+    }
+  }
+}
+
+# the following block is executed before the program flag -d[0-3] is processed.
+# to enable it, change temporarily the debug threshold level below from 3 to 0.
+if( $debug_level >= 3 ) {
+  log_debug( "m_map_table:\n" );
+  my $w_max = 0;
+  for my $round ( 0, 1 ) {
+  for my $map ( sort keys %m_map_table ) {
+    if( $round == 0 ) {
+      my $w = length( $map );
+      $w_max = $w if $w_max < $w;
+    } else {
+      my $table = $m_map_table{$map};
+      log_debug( sprintf( "  %-$w_max" . "s : %s\n", $map, $table ) );
+    }
+  } }
+  log_debug( "m_table_map:\n" );
+  my $w_max = 0;
+  for my $round ( 0, 1 ) {
+  for my $table ( sort keys %m_table_map ) {
+    if( $round == 0 ) {
+      my $w = length( $table );
+      $w_max = $w if $w_max < $w;
+    } else {
+      my $map_a = $m_table_map{$table};
+      log_debug( sprintf( "  %-$w_max" . "s : %s\n", $table, join( ", ", sort @$map_a ) ) );
+    }
+  } }
+}
+
+# }}}
+
+# {{{ database maps from nkey to id
+
+# %m_nkey_sh : ( $map => \@st_s )
+
+# $map   : (string) name of map from nkey to id
+# @st_s  : ( 0: $query, 1? $param, ... )
+# $query : (string) statement query
+
+# an nkey is a non-unique key, i.e., it is treated as a key (and it looks like a key),
+# but it is not declared with UNIQUE in the MMEX database (it would be nice if non-unique
+# keys become unique keys in a future version of MMEX). the $query searches the database
+# for records containing the nkey, and returns their id (rowid). although more than one
+# id may be returned, in most cases a single id is expected if the nkey is found.
+
+# }}}
+my %m_nkey_sh = (
+  # {{{ ASSET
+
+  ASSET => [
+    "select ASSETID from ASSETS_V1 where ASSETNAME = ? and STARTDATE = ?"
+  ],
+
+  # }}}
+  # {{{ STOCK
+
+  STOCK => [
+    "select STOCKID from STOCK_V1 where STOCKNAME = ? and PURCHASEDATE = ?"
+  ],
+
+  # }}}
+  # {{{ FIELD
+
+  FIELD => [
+    "select FIELDID from CUSTOMFIELD_V1 where DESCRIPTION = ?"
+  ],
+
+  # }}}
+);
+
+# }}}
+# {{{ var
+
+# database state
+# assertion: defined $m_db ==> $m_file ne ""
+my $m_file;  # (string) MMEX filename
+my $m_mode;  # (boolean) open MMEX file for write
+my $m_db;    # DBI database handle
+
+# {{{ cache of database maps between id and key
+
+# %m_map_cache_sh : ( $map => \@cache_s )
+
+# $map     : (string) map name
+# @cache_s : one of:
+#            ( 0: "table", 1: \%id_key, 2: \%key_id, 3: $collate )
+#            ( 0: "const", 1: \%id_key, 2: \%key_id, 3: $collate )
+#            ( 0: "union", 1: [ [ $map1, \@cache1_s ], ... ] )
+# %id_key  : ( $id => $key ) map from id to key
+# %key_id  : ( $key => $id ) map from (normalized) key to id
+# $collate : undef or sub( $key ) -> $normalized_key
+
+# %m_map_cache_sh is populated on demand. if a map of type "table" or "const" appears
+# in the cache, its %id_key is defined (populated), but its %key_id may be undef.
+# if a map of type "union" is in the cache, all its components are also in the cache.
+
+# }}}
+my %m_map_cache_sh = ();
+
+# {{{ cache of database statements from nkey to id
+
+# %m_nkey_cache_sh : ( $map => $sth )
+
+# $map : (string) map name
+# $sth : DBI statement handle
+
+# }}}
+my %m_nkey_cache_sh = ();
+
+# }}}
+
+# {{{ sub m_open( $mode )
+# $mode : (boolean) (re)open MMEX file for read (0) or write (1)
+# open $m_file if not already open.
+# re-open $m_file if already open in lower mode ($m_mode < $mode).
+# no-operation otherwise (already open and $m_mode >= $mode).
+
+sub m_open { my( $mode ) = @_;
+  # {{{ $m_db: close database if already open in lower mode
+
+  if( defined $m_db ) {
+    return if $m_mode || ! $mode;
+    m_close( 0 );
+  }
+
+  # }}}
+  # {{{ $m_mode
+
+  $m_mode = $mode;
+
+  # }}}
+  # {{{ $m_db: open database
+
+  no strict "subs";
+
+  if( $m_file eq "" ) {
+    log_fatal( "missing MMEX file\n" );
+    exit(1);
+  }
+
+  if( ! -f $m_file ) {
+    log_fatal( "MMEX file [$m_file] does not exist\n" );
+    exit(1);
+  }
+
+  if( $info_level >= 1 ) {
+    my $mode = $m_mode ? "write" : "read-only";
+    log_info( "opening MMEX file [$m_file] in $mode mode\n" );
+  }
+
+  my %m_attr = ( RaiseError => 0, AutoCommit => 0, sqlite_unicode => 1 );
+  $m_attr{sqlite_open_flags} = DBD::SQLite::OPEN_READONLY unless $m_mode;
+  $m_db = DBI->connect( "dbi:SQLite:dbname=$m_file", "", "", \%m_attr );
+
+  if( ! defined $m_db ) {
+    log_fatal( "cannot open [$m_file]: $DBI::errstr\n" );
+    exit(1);
+  }
+
+  # }}}
+  # {{{ check DATAVERSION
+
+  my @row = $m_db->selectrow_array(
+    "select INFOVALUE from INFOTABLE_V1 where INFONAME = 'DATAVERSION'"
+  );
+  if( @row < 1 || $row[0] ne $m_data_version ) {
+    log_fatal( "MMEX file [$m_file] has DATAVERSION=[" . $row[0] . "] (see -vc)\n" );
+    $m_db->disconnect();
+    exit(1);
+  }
+
+  # }}}
+  # {{{ if $mode: check ISUSED
+
+  if( $mode ) {
+    my @row = $m_db->selectrow_array(
+      "select INFOVALUE from INFOTABLE_V1 where INFONAME = 'ISUSED'"
+    );
+    if( @row >= 1 && $row[0] eq "TRUE" ) {
+      log_fatal( "MMEX file [$m_file] is used; close MMEX application and try again\n" );
+      $m_db->disconnect();
+      exit(1);
+    }
+  }
+
+  # }}}
+  # {{{ initialize cache
+
+  %m_map_cache_sh = ();
+  %m_nkey_cache_sh = ();
+
+  # }}}
+}
+
+# }}}
+# {{{ sub m_close( $error )
+# close $m_db
+# do not commit changes if $error
+
+sub m_close { my( $error ) = @_;
+  return unless defined $m_db;
+  # {{{ delete cache
+
+  %m_map_cache_sh = ();
+  %m_nkey_cache_sh = ();
+
+  # }}}
+  # {{{ $m_db: commit changes or rollback
+
+  if( ! $m_mode ) {
+    # no changes, since database is open in read-only mode
+  } elsif( ! $error ) {
+    if( $info_level >= 2 ) {
+      log_info( "writing MMEX file [$m_file]\n" );
+    }
+    $m_db->commit();
+  } else {
+    if( $info_level >= 2 ) {
+      log_info( "rolling back MMEX database changes\n" );
+    }
+    $m_db->rollback();
+  }
+
+  # }}}
+  # {{{ $m_db: close database
+
+  if( $info_level >= 2 ) {
+    log_info( "closing MMEX file [$m_file]\n" );
+  }
+
+  $m_db->disconnect();
+  $m_db = undef;
+
+  $m_mode = undef;
+
+  # }}}
+}
+
+# }}}
+# {{{ sub m_prepare( $query ) -> $sth
+# prepare $query and return a statement handle
+
+sub m_prepare { my( $query ) = @_;
+  # {{{ explain query
+
+  if( $debug_query ) {
+    log_open( "explain query" );
+    log_plain( "* query\n" );
+    for ( split( "\n", $query ) ) { log_plain( "  $_\n" ); }
+    log_sep();
+    log_plain( "* explain\n" );
+
+    my $parse_ok = 1;    # (boolean) no parsing error found so far
+    my %sel_level = ();  # $sel -> $level
+
+    my $sth_explain = $m_db->prepare( "explain query plan " . $query );
+    $sth_explain->execute();
+    while( my @row = $sth_explain->fetchrow_array() ) {
+      my( $sel, $order, $from, $detail ) = @row;
+      # {{{ if cannot parse: switch to listing
+
+      unless(
+        $parse_ok &&
+        $sel != 0 &&
+        ! exists $sel_level{$sel} &&
+        ( $order == 0 || exists $sel_level{$order} ) &&
+        $from == 0
+      ) {
+        log_plain( "\n" ) if $parse_ok;
+        log_plain( sprintf(
+          "sel=%-5s order=%-5s from=%-3s %s\n",
+          "$sel,", "$order,", "$from,", $detail
+        ) );
+        $parse_ok = 0;
+        next;
+      }
+
+      # }}}
+      if( $order == 0 ) {
+        $sel_level{$sel} = 0;
+      } else {
+        $sel_level{$sel} = $sel_level{$order} + 1;
+      }
+      log_plain( "  " ) for 0..$sel_level{$sel};
+      log_plain( "$detail\n" );
+    }
+
+    log_sep();
+
+    log_close();
+  }
+
+  # }}}
+
+  my $sth = $m_db->prepare( $query );
+
+  if( ! defined $sth ) {
+    log_fatal( "cannot prepare query: $query\n" );
+    m_close(1); exit(1);
+  }
+
+  return $sth;
+}
+
+# }}}
+
+# {{{ sub m_map_cache_id_key( \@cache_s, $id ) -> $key
+# return the key of $id found in @cache_s (or undef if $id is not found)
+# assertion: @cache_s is defined and contains the map from id to key
+
+sub m_map_cache_id_key { my( $cache_s, $id ) = @_;
+  my $type = $cache_s->[0];
+  my $key;
+
+  if( $type eq "table" || $type eq "const" ) {
+    # search for $id in cache
+    my $id_key = $cache_s->[1];
+    $key = $id_key->{$id} if exists $id_key->{$id};
+  }
+
+  elsif( $type eq "union" ) {
+    # search for $id in each component; stop searching if found
+    for my $union_s ( @{ $cache_s->[1] } ) {
+      my $cache1_s = $union_s->[1];
+      $key = m_map_cache_id_key( $cache1_s, $id );
+      last if defined $key;
+    }
+  }
+
+  return $key;
+}
+
+# }}}
+# {{{ sub m_map_cache_key_id( \@cache_s, $key ) -> $id
+# return the id of $key found in @cache_s (or undef if $key is not found)
+# assertion: @cache_s is defined and contains the map in both directions
+
+sub m_map_cache_key_id { my( $cache_s, $key ) = @_;
+  my $type = $cache_s->[0];
+  my $id;
+
+  if( $type eq "table" || $type eq "const" ) {
+    # search for the normalized $key in cache
+    my $key_id  = $cache_s->[2];
+    my $collate = $cache_s->[3];
+    my $key1 = defined $collate ? $collate->( $key ) : $key;
+    $id = $key_id->{$key1} if exists $key_id->{$key1};
+  }
+
+  elsif( $type eq "union" ) {
+    # search for $key in each component; stop searching if found
+    for my $union_s ( @{ $cache_s->[1] } ) {
+      my $cache1_s = $union_s->[1];
+      $id = m_map_cache_key_id( $cache1_s, $key );
+      last if defined $id;
+    }
+  }
+
+  return $id;
+}
+
+# }}}
+# {{{ sub m_map_id_key( $map, $id=undef ) -> \@cache_s or $key
+# create cache with name $map, containing the map from id to key
+# if $id is not defined, return the cache structure; otherwise return the key of $id
+
+sub m_map_id_key { my( $map, $id ) = @_;
+  my $cache_s;
+
+  if( exists $m_map_cache_sh{$map} ) {
+    # $map is in cache (and contains the map from id to key)
+    $cache_s = $m_map_cache_sh{$map};
+  }
+
+  elsif( defined $m_map_sh{$map} ) {
+    # create cache with name $map
+    my $map_s = $m_map_sh{$map};
+    my $type = $map_s->[0];
+    # {{{ if $type eq "table"
+
+    if( $type eq "table" ) {
+      my $id_key = {};
+      my $query = defined $map_s->[5] ? $map_s->[5] :
+        "select $map_s->[3], $map_s->[4] from $map_s->[2]";
+      my $sth = m_prepare( $query );
+      $sth->execute(); while( my @row = $sth->fetchrow_array() ) {
+        $id_key->{ $row[0] } = $row[1];
+      }
+
+      $cache_s = [ $type, $id_key, undef, $map_s->[1] ];
+
+      if( $info_level >= 2 ) {
+        my $map_n = keys %$id_key;
+        log_info( "caching $map $type map from id to key (size: $map_n)\n" );
+      }
+      $m_map_cache_sh{$map} = $cache_s;
+    }
+
+    # }}}
+    # {{{ if $type eq "const"
+
+    elsif( $type eq "const" ) {
+      my $id_key = $map_s->[2];
+      $cache_s = [ $type, $id_key, undef, $map_s->[1] ];
+
+      if( $info_level >= 2 ) {
+        my $map_n = keys %$id_key;
+        log_info( "caching $map $type map from id to key (size: $map_n)\n" );
+      }
+      $m_map_cache_sh{$map} = $cache_s;
+    }
+
+    # }}}
+    # {{{ if $type eq "union"
+
+    elsif( $type eq "union" ) {
+      my @union_sa = ();
+      for my $map1 ( @{ $map_s->[1] } ) {
+        my $cache1_s =
+          exists $m_map_cache_sh{$map} ? $m_map_cache_sh{$map} :
+          m_map_id_key( $map1 );
+        if( $cache1_s->[0] eq "union" ) {
+          # expand union components
+          push( @union_sa, @{ $cache1_s->[1] } );
+        } else {
+          push( @union_sa, [ $map1, $cache1_s ] );
+        }
+      }
+
+      $cache_s = [ $type, \@union_sa ];
+
+      if( $info_level >= 2 ) {
+        my $map_n = @union_sa;
+        log_info( "caching $map $type map from id to key (size: $map_n)\n" );
+      }
+      $m_map_cache_sh{$map} = $cache_s;
+    }
+
+    # }}}
+    # {{{ else
+
+    else {
+      log_fatal( "map $map has unknown type [$type]\n" );
+      m_close(1); exit(1);
+    }
+
+    # }}}
+  }
+
+  else {
+    log_checkf( ": unknown map [$map] from id to key\n" );
+    m_close(1); exit(1);
+  }
+
+  if( defined $id ) {
+    return m_map_cache_id_key( $cache_s, $id );
+  } else {
+    return $cache_s;
+  }
+}
+
+# }}}
+# {{{ sub m_map_key_id( $map, $key=undef ) -> \@cache_s or $id
+# create cache with name $map, containing the map in both directions
+# if $key is not defined, return the cache structure; otherwise return the id of $key
+
+sub m_map_key_id { my( $map, $key ) = @_;
+  # create the map from id to key
+  my $cache_s = m_map_id_key( $map );
+  my $type = $cache_s->[0];
+
+  # create the map from key to id
+  # {{{ if $type eq "table" || $type eq "const"
+
+  if( $type eq "table" || $type eq "const" ) {
+  if( ! defined $cache_s->[2] ) {
+    my $id_key  = $cache_s->[1];
+    my $collate = $cache_s->[3];
+
+    # invert the map from id to (normalized) key
+    my $key_id = {};
+    for my $id ( keys %$id_key ) {
+      my $key = $id_key->{$id};
+      my $key1 = defined $collate ? $collate->( $key ) : $key;
+      if( exists $key_id->{$key1} ) {
+        log_fatal( "map $map has duplicate key [$key1]\n" );
+        m_close(1); exit(1);
+      }
+      $key_id->{$key1} = $id;
+    }
+
+    if( $info_level >= 2 ) {
+      my $map_n = keys %$key_id;
+      log_info( "caching $map $type map from key to id (size: $map_n)\n" );
+    }
+    $cache_s->[2] = $key_id;
+  } }
+
+  # }}}
+  # {{{ if $type eq "union"
+
+  elsif( $type eq "union" ) {
+    # create the map from key to id in each component
+    my $union_sa = $cache_s->[1];
+    for my $union_s ( @$union_sa ) {
+      my( $map1, $cache1_s ) = @$union_s;
+      # assertion: the type of $cache1_s is "table" or "const"
+      next if defined $cache1_s->[2];
+      m_map_key_id( $map1 );
+    }
+  }
+
+  # }}}
+
+  if( defined $key ) {
+    return m_map_cache_key_id( $cache_s, $key );
+  } else {
+    return $cache_s;
+  }
+}
+
+# }}}
+# {{{ sub m_map_insert( $map, $id, $key )
+# insert a new entry into the cache with name $map
+# only maps of type "table" can be modified. insert into a map of type "union" is
+# redirected to its first component (which must be of type "table").
+
+sub m_map_insert { my( $map, $id, $key ) = @_;
+  # {{{ $map1
+
+  my $map1 = $map;
+
+  # if $map1 is of type "union", get its first component
+  while( exists $m_map_sh{$map1} && $m_map_sh{$map1}->[0] eq "union" ) {
+    $map1 = $m_map_sh{$map1}->[1]->[0];
+  }
+
+  # }}}
+  # {{{ check: $map1 is of type "table"
+
+  if( ! exists $m_map_sh{$map1} || $m_map_sh{$map1}->[0] ne "table" ) {
+    log_checkf( ": invalid map [$map1] (derived from [$map])\n" );
+    m_close(1); exit(1);
+  }
+
+  # }}}
+  # {{{ $cache_s
+
+  my $cache_s;
+
+  if( $dry_run ) {
+    # create cache for $map1, in both directions
+    $cache_s = m_map_key_id( $map1 );
+  } elsif( exists $m_map_cache_sh{$map1} ) {
+    $cache_s = $m_map_cache_sh{$map1};
+  }
+
+  # do not insert a new entry if $map1 is not in cache
+  return unless defined $cache_s;
+
+  # }}}
+  # {{{ insert map from id to key
+  # note: in dry run mode, new records are not inserted into the database and they have
+  # no rowid; but they are inserted into the cache as a map from key to the dummy id 0,
+  # in order to register the key.
+
+  # the second condition below is always true (the map from id to key is in cache)
+  if( $id != 0 && defined $cache_s->[1] ) {
+    my $id_key = $cache_s->[1];
+    if( exists $id_key->{$id} ) {
+      log_fatal( "map $map already contains id $id\n" );
+      m_close(1); exit(1);
+    }
+    $id_key->{$id} = $key;
+  }
+
+  # }}}
+  # {{{ insert map from key to id
+
+  # the condition below may be false (the map from key to id may not be in cache)
+  if( defined $cache_s->[2] ) {
+    my $key_id  = $cache_s->[2];
+    my $collate = $cache_s->[3];
+    my $key1 = defined $collate ? $collate->( $key ) : $key;
+    if( exists $key_id->{$key1} ) {
+      log_fatal( "map $map already contains key [$key1]\n" );
+      m_close(1); exit(1);
+    }
+    $key_id->{$key1} = $id;
+  }
+
+  # }}}
+}
+
+# }}}
+
+# {{{ sub m_nkey_id( $map ) -> $sth
+# create cache with name $map, containing the database statement from nkey to id
+
+sub m_nkey_id { my( $map ) = @_;
+  my $sth;
+
+  if( exists $m_nkey_cache_sh{$map} ) {
+    # statement handle is in cache
+    $sth = $m_nkey_cache_sh{$map};
+  }
+
+  elsif( defined $m_nkey_sh{$map} ) {
+    # prepare statement handle
+    my $st_s = $m_nkey_sh{$map};
+    $sth = m_prepare( $st_s->[0] );
+    if( $info_level >= 2 ) {
+      log_info( "caching $map statement from pseudo-key to id\n" );
+    }
+    $m_nkey_cache_sh{$map} = $sth;
+  }
+
+  else {
+    log_checkf( ": unknown map [$map] from nkey to id\n" );
+    m_close(1); exit(1);
+  }
+
+  return $sth;
+}
+
+# }}}
+
+# {{{ sub m_select_list( \@col_a, \%col_value ) -> $select_list
+# @col_a       : order of columns in select query
+# %col_value   : ( $col => $value )
+# $select_list : (string) "$value as $col, ..."
+# for fields in @col_a not found in %col_value, use NULL as value
+
+sub m_select_list { my( $col_a, $col_value ) = @_;
+  return join( ", ", map {
+    ( exists $col_value->{$_} ? $col_value->{$_} : "NULL" ) . " as $_"
+  } @$col_a );
+}
+
+# }}}
+# {{{ sub m_execute( $sth, \@field_a, \%field_value )
+# $sth         : DBI statement handle
+# @field_a     : ( $field, ... )
+# %field_value : ( $field => $value )
+# bind fields in @field_a to the values in %field_value and execute $sth
+
+sub m_execute { my( $sth, $field_a, $field_value ) = @_;
+  my @value_a = ();
+  for my $field ( @$field_a ) {
+    push( @value_a, $field_value->{$field} );
+  }
+
+  $sth->execute( @value_a );
+}
+
+# }}}
+# {{{ sub m_execute_count( $sth, \@field_a, \%field_value ) -> $cnt
+# arguments as in m_execute()
+# bind and execute $sth
+# return the number of results
+
+sub m_execute_count { my( $sth, $field_a, $field_value ) = @_;
+  m_execute( $sth, $field_a, $field_value );
+  my $cnt = 0; while( $sth->fetch() ) { $cnt++; }
+  $sth->finish();
+  return $cnt;
+}
+
+# }}}
+# {{{ sub m_execute_row1(  $sth, \@field_a, \%field_value ) -> $cnt, @row1
+# arguments as in m_execute()
+# bind and execute $sth
+# return the number of results and the first result
+
+sub m_execute_row1 { my( $sth, $field_a, $field_value ) = @_;
+  m_execute( $sth, $field_a, $field_value );
+  my @row1 = ();
+  my $cnt = 0; while( my $row = $sth->fetch() ) {
+    @row1 = @$row if $cnt == 0;
+    $cnt++;
+  }
+  $sth->finish();
+  return $cnt, @row1;
+}
+
+# }}}
+# {{{ sub m_execute_col1(  $sth, \@field_a, \%field_value ) -> \@col1
+# arguments as in m_execute()
+# bind and execute $sth
+# return the first column of the result or an empty list if there is no result
+
+sub m_execute_col1 { my( $sth, $field_a, $field_value ) = @_;
+  my @col1 = ();
+  m_execute( $sth, $field_a, $field_value );
+  while( my @row = $sth->fetchrow_array() ) {
+    push( @col1, $row[0] );
+  }
+  $sth->finish();
+  return \@col1;
+}
+
+# }}}
+# }}}
+# {{{ output (-o)
+# {{{ note
+
+# the output XLSX file is a complete MMEX database dump. each XLSX worksheet contains
+# one main MMEX table, and possibly other related tables, or parts of auxiliary tables
+# (e.g., ATTACHMENT_V1 is distributed over several worksheets).
+
+# each row in an output XLSX worksheet contains a single MMEX database record.
+# hierarchy relationships in MMEX database are represented with a hierarchical layout
+# in an XLSX worksheet. e.g., one transaction in table CHECKINGACCOUNT_V1 is related to
+# multiple records in table SPLITTRANSACTIONS_V1, which belong to this transaction only;
+# in the transactions worksheet, split transactions appear in separate rows, immediately
+# below the transaction row in which they below, using the outline (group) XLSX feature.
+
+# in XLSX worksheets containing records from more than one MMEX tables, the MMEX table
+# corresponding to each XLSX row can be easily identified from the pattern of non-empty
+# (disciminator) and empty columns in the row. notice that the XLSX worksheet layout has
+# been designed mostly as an interchange format with MMEX, rather than for convenience
+# in maintaining the database in XLSX format. e.g., records from ATTACHMENT_V1 appear
+# in separate rows, also in the (usual) case of one attachment per parent record.
+
+# all MMEX database ids are translated from a numeric value to a key symbol or name.
+# XLSX columns containing numeric ids are disabled (not generated) by default; they can
+# be enabled with the -ci flag. the rowid (primary key) of the main table can be enebled
+# with the -cp flag.
+
+# id columns, if present in an XLSX worksheet, are ignored by the input command of
+# this program, except of column "#" (the rowid key of the main table), which is used
+# as a filter (only rows with positive "#" value are considered after the header row).
+# the output XLSX file without id columns, is in principle an exact representation of
+# the MMEX database, except for the id values, i.e., the original MMEX database can
+# be reproduced from the XLSX file, possibly with different id values. notice that
+# database ids are used as links, in order to define relationships between records,
+# however, the numeric value of an id itself is not important.
+
+# since an XLSX worksheet may contain records from more than one MMEX tables, a few
+# auxiliary columns are generated internally, in order to simplify the sorting of rows.
+# these columns are disabled (do not appear in XLSX output) by default; if needed,
+# they can be enabled with the -cs flag. they usually have the suffix "_S", and they
+# repeat information from key columns. id and auxiliary sorting columns, if generated,
+# are hidden using the outline (group) XLSX feature. they can be removed from the output
+# XLSX file without loss of information.
+
+# note: both NULL (no value) and '' (empty text) in MMEX (sqlite3) database, are
+# converted to an empty cell, therefore they are indistinguishable in XLSX output.
+# thankfully, MMEX 1.8.0 does not mix NULL and '' (missing text is stored as '').
+
+# }}}
+# {{{ const
+
+# {{{ spec of output worksheets
+
+# @o_sheet_sa : ( \@sheet_s, ... )
+
+# @sheet_s : ( 0: $sheet, 1: $name, 2: $dep_l, 3: [ \@col_s, ... ], 4: $select )
+# @col_s   : [ 0: $class, 1: $lr, 2: $col, 3: $type, 4: format, 5: $width ]
+
+# $sheet   : (string) single-letter code of XLSX worksheet
+# $name    : (string) XLSX worksheet name
+# $dep_l   : (string) list of dependencies (sheet codes without separation)
+# $select  : (string) $query or sub( \@col_a ) -> $query: database query generator
+# $class   : 0: rowid, 1: sort, 2: id, 3: data, 4: outline
+# $lr      : (integer) row outline (group) level (0: not collapsed, >0: collapsed)
+# $col     : (string) column name in XLSX worksheet (appears in header)
+# $type    : (string) type of XLSX column (not used)
+# $format  : (key) column format; see o_wb_format()
+# $width   : (integer) XLSX column width
+
+# }}}
+my @o_sheet_sa = (
+  # {{{ i (info)
+
+  [ "i", "info", "", [
+    # {{{ $class, $lr, $col, $type, $format, $width
+
+    [ 0, 0, "ID",      "id",     "dc",  4 ], # at common and translated records
+    [ 2, 1, "ID_T",    "id",     "dc",  4 ], # at original records
+    [ 1, 0, "NAME_S",  "string", "dl", 30 ],
+    [ 3, 0, "NAME",    "string", "dl", 30 ], # UNIQUE
+    [ 3, 0, "VALUE",   "string", "dl", 60 ],
+
+    # }}}
+  ], sub {
+    "with INFO_TRANS as (" .
+    # {{{ INFOTABLE_V1 (INFONAME != BASECURRENCYID)
+
+    "\n  select " . m_select_list( $_[0], {
+      "ID"      => "INFOID",
+      "NAME_S"  => "INFONAME",
+      "NAME"    => "INFONAME",
+      "VALUE"   => "INFOVALUE",
+    } ) . "\n  from INFOTABLE_V1" .
+    "\n  where INFONAME != 'BASECURRENCYID'" .
+
+    # }}}
+    # {{{ INFOTABLE_V1 (INFONAME  = BASECURRENCYID)
+
+    "\n  union all" .
+    "\n  select " . m_select_list( $_[0], {
+      "ID_T"    => "INFOID",
+      "NAME_S"  => "INFONAME",
+      "NAME"    => "INFONAME",
+      "VALUE"   => "INFOVALUE",
+    } ) . "\n  from INFOTABLE_V1" .
+    "\n  where INFONAME = 'BASECURRENCYID'" .
+
+    # }}}
+    # {{{ INFOTABLE_V1 (INFONAME  = BASECURRENCYID), CURRENCYFORMATS_V1
+
+    "\n  union all" .
+    "\n  select " . m_select_list( $_[0], {
+      "ID"      => "i.INFOID",
+      "NAME_S"  => "i.INFONAME",
+      "NAME"    => "'BASECURRENCY'",
+      "VALUE"   => "u.CURRENCY_SYMBOL",
+    } ) .
+    "\n  from INFOTABLE_V1 i, CURRENCYFORMATS_V1 u" .
+    "\n  where i.INFONAME = 'BASECURRENCYID' and i.INFOVALUE = u.CURRENCYID" .
+
+    # }}}
+    "\n) select * from INFO_TRANS order by NAME_S, ID"
+  } ],
+
+  # }}}
+  # {{{ u (currency)
+
+  [ "u", "currency", "", [
+    # {{{ $class, $lr, $col, $type, $format, $width
+
+    [ 0, 0, "ID",        "id",     "dc",  4 ],
+    [ 1, 0, "TYPE_S",    "string", "dc",  0 ],
+    [ 1, 0, "SYMBOL_S",  "string", "dc",  0 ],
+    [ 3, 0, "TYPE",      "string", "dc",  0 ],
+    [ 3, 0, "SYMBOL",    "string", "dc",  0 ], # UNIQUE
+    [ 3, 0, "NAME",      "string", "dl", 20 ], # UNIQUE
+    [ 4, 0, "PFX",       "string", "dr",  0 ],
+    [ 4, 0, "SFX",       "string", "dl",  0 ],
+    [ 4, 0, "DEC_PNT",   "string", "dc",  0 ],
+    [ 4, 0, "GRP_SEP",   "string", "dc",  0 ],
+    [ 4, 0, "UNIT",      "string", "dl",  0 ],
+    [ 4, 0, "CENT",      "string", "dl",  0 ],
+    [ 3, 0, "SCALE",     "number", "dc",  0 ],
+    [ 2, 1, "HIST_ID",   "id",     "dc",  4 ], # .CURRENCYHISTORY_V1
+    [ 3, 1, "HIST_DATE", "string", "dc",  0 ], # .CURRENCYHISTORY_V1
+    [ 2, 1, "UPDATE_ID", "id",     "dc",  4 ], # .CURRENCYHISTORY_V1
+    [ 3, 1, "-> UPDATE", "string", "dc",  0 ],
+    [ 3, 0, "RATE",      "number", "dr",  0 ], # :CURRENCYHISTORY_V1
+
+    # }}}
+  ], sub {
+    "with u as (" .
+    # {{{ CURRENCYFORMATS_V1
+
+    "\n  select " . m_select_list( $_[0], {
+      "ID"       => "CURRENCYID",
+      "TYPE_S"   => "CURRENCY_TYPE",
+      "SYMBOL_S" => "CURRENCY_SYMBOL",
+      "TYPE"     => "CURRENCY_TYPE",
+      "SYMBOL"   => "CURRENCY_SYMBOL",
+      "NAME"     => "CURRENCYNAME",
+      "PFX"      => "PFX_SYMBOL",
+      "SFX"      => "SFX_SYMBOL",
+      "DEC_PNT"  => "DECIMAL_POINT",
+      "GRP_SEP"  => "GROUP_SEPARATOR",
+      "UNIT"     => "UNIT_NAME",
+      "CENT"     => "CENT_NAME",
+      "SCALE"    => "SCALE",
+      "RATE"     => "BASECONVRATE",
+    } ) . "\n  from CURRENCYFORMATS_V1" .
+
+    # }}}
+    # {{{ CURRENCYFORMATS_V1, CURRENCYHISTORY_V1
+
+    "\n  union all" .
+    "\n  select " . m_select_list( $_[0], {
+      "ID"        => "u.CURRENCYID",
+      "TYPE_S"    => "u.CURRENCY_TYPE",
+      "SYMBOL_S"  => "u.CURRENCY_SYMBOL",
+      "HIST_ID"   => "uh.CURRHISTID",
+      "HIST_DATE" => "uh.CURRDATE",
+      "UPDATE_ID" => "uh.CURRUPDTYPE",
+      "RATE"      => "uh.CURRVALUE",
+    } ) .
+    "\n  from CURRENCYFORMATS_V1 u, CURRENCYHISTORY_V1 uh" .
+    "\n  where u.CURRENCYID = uh.CURRENCYID" .
+
+    # }}}
+    "\n) select * from u order by TYPE_S, SYMBOL_S, ID, HIST_DATE"
+  } ],
+
+  # }}}
+  # {{{ a (account)
+
+  [ "a", "account", "u", [
+    # {{{ $class, $lr, $col, $type, $format, $width
+
+    [ 0, 0, "ID",            "id",     "dc",  4 ],
+    [ 1, 0, "TYPE_S",        "string", "dl",  0 ],
+    [ 1, 0, "NAME_S",        "string", "dl", 16 ],
+    [ 3, 0, "TYPE",          "string", "dl",  0 ],
+    [ 3, 0, "NAME",          "string", "dl", 16 ], # UNIQUE
+    [ 4, 0, "NOTES",         "string", "dl", 20 ],
+    [ 4, 0, "STATUS",        "string", "dc",  0 ],
+    [ 4, 0, "FAVORITE",      "string", "dc",  0 ],
+    [ 3, 0, "DATE",          "string", "dc",  0 ],
+    [ 3, 0, "BALANCE",       "number", "dr",  0 ],
+    [ 2, 0, "CURRENCY_ID",   "id",     "dc",  4 ],
+    [ 3, 0, "-> CURRENCY",   "string", "dc",  0 ], # .CURRENCYFORMATS_V1
+    [ 4, 0, "NUM",           "string", "dl", 20 ],
+    [ 4, 0, "HELD_AT",       "string", "dl", 20 ],
+    [ 4, 0, "WEBSITE",       "string", "dl", 20 ],
+    [ 4, 0, "CONTACT_INFO",  "string", "dl", 20 ],
+    [ 4, 0, "ACCESS_INFO",   "string", "dl", 20 ],
+    [ 4, 0, "STMT_LOCKED",   "number", "dc",  0 ],
+    [ 4, 0, "STMT_DATE",     "string", "dc",  0 ],
+    [ 4, 0, "BALANCE_MIN",   "number", "dr",  0 ],
+    [ 4, 0, "CREDIT_LIMIT",  "number", "dr",  0 ],
+    [ 4, 0, "INTEREST_RATE", "number", "dc",  0 ],
+    [ 4, 0, "PAYMENT_DATE",  "string", "dc",  0 ],
+    [ 4, 0, "PAYMENT_MIN",   "number", "dr",  0 ],
+    [ 2, 1, "ATTACH_ID",     "id",     "dc",  4 ], # .ATTACHMENT_V1
+    [ 3, 1, "ATTACH_DESC",   "string", "dl", 20 ], # .ATTACHMENT_V1
+    [ 3, 1, "ATTACH_FILE",   "string", "dl", 20 ], # .ATTACHMENT_V1
+
+    # }}}
+  ], sub {
+    "with a as (" .
+    # {{{ ACCOUNTLIST_V1
+
+    "\n  select " . m_select_list( $_[0], {
+      "ID"            => "ACCOUNTID",
+      "TYPE_S"        => "ACCOUNTTYPE",
+      "NAME_S"        => "ACCOUNTNAME",
+      "TYPE"          => "ACCOUNTTYPE",
+      "NAME"          => "ACCOUNTNAME",
+      "NOTES"         => "NOTES",
+      "STATUS"        => "STATUS",
+      "FAVORITE"      => "FAVORITEACCT",
+      "DATE"          => "INITIALDATE",
+      "BALANCE"       => "INITIALBAL",
+      "CURRENCY_ID"   => "CURRENCYID",
+      "NUM"           => "ACCOUNTNUM",
+      "HELD_AT"       => "HELDAT",
+      "WEBSITE"       => "WEBSITE",
+      "CONTACT_INFO"  => "CONTACTINFO",
+      "ACCESS_INFO"   => "ACCESSINFO",
+      "STMT_LOCKED"   => "STATEMENTLOCKED",
+      "STMT_DATE"     => "STATEMENTDATE",
+      "BALANCE_MIN"   => "MINIMUMBALANCE",
+      "CREDIT_LIMIT"  => "CREDITLIMIT",
+      "INTEREST_RATE" => "INTERESTRATE",
+      "PAYMENT_DATE"  => "PAYMENTDUEDATE",
+      "PAYMENT_MIN"   => "MINIMUMPAYMENT",
+    } ) . "\n  from ACCOUNTLIST_V1" .
+
+    # }}}
+    # {{{ ACCOUNTLIST_V1, ATTACHMENT_V1 (REFTYPE=BankAccount)
+
+    "\n  union all" .
+    "\n  select " . m_select_list( $_[0], {
+      "ID"          => "a.ACCOUNTID",
+      "TYPE_S"      => "a.ACCOUNTTYPE",
+      "NAME_S"      => "a.ACCOUNTNAME",
+      "ATTACH_ID"   => "aa.ATTACHMENTID",
+      "ATTACH_DESC" => "aa.DESCRIPTION",
+      "ATTACH_FILE" => "aa.FILENAME",
+    } ) .
+    "\n  from ACCOUNTLIST_V1 a, ATTACHMENT_V1 aa" .
+    "\n  where aa.REFTYPE = 'BankAccount' and aa.REFID = a.ACCOUNTID" .
+
+    # }}}
+    "\n) select * from a order by TYPE_S, NAME_S, ID, ATTACH_ID"
+  } ],
+
+  # }}}
+  # {{{ e (assets)
+
+  [ "e", "assets", "u", [
+    # {{{ $class, $lr, $col, $type, $format, $width
+
+    [ 0, 0, "ID",          "id",     "dc",  4 ],
+    [ 1, 0, "TYPE_S",      "string", "dl", 20 ],
+    [ 1, 0, "NAME_S",      "string", "dl", 20 ],
+    [ 3, 0, "TYPE",        "string", "dl", 20 ],
+    [ 3, 0, "NAME",        "string", "dl", 20 ],
+    [ 4, 0, "NOTES",       "string", "dl", 20 ],
+    [ 4, 0, "STATUS",      "string", "dc",  0 ],
+    [ 3, 0, "DATE",        "string", "dc",  0 ],
+    [ 3, 0, "VALUE",       "number", "dr",  0 ],
+    [ 2, 0, "CURRENCY_ID", "id",     "dc",  4 ],
+    [ 3, 0, "-> CURRENCY", "string", "dc",  0 ], # .CURRENCYFORMATS_V1
+    [ 4, 0, "CHANGE",      "string", "dc",  0 ],
+    [ 4, 0, "CHANGE_MODE", "string", "dc",  0 ],
+    [ 4, 0, "CHANGE_RATE", "number", "dc",  0 ],
+    [ 2, 1, "ATTACH_ID",   "id",     "dc",  4 ], # .ATTACHMENT_V1
+    [ 3, 1, "ATTACH_DESC", "string", "dl", 20 ], # .ATTACHMENT_V1
+    [ 3, 1, "ATTACH_FILE", "string", "dl", 20 ], # .ATTACHMENT_V1
+
+    # }}}
+  ], sub {
+    "with e as (" .
+    # {{{ ASSETS_V1
+
+    "\n  select " . m_select_list( $_[0], {
+      "ID"          => "ASSETID",
+      "TYPE_S"      => "ASSETTYPE",
+      "NAME_S"      => "ASSETNAME",
+      "TYPE"        => "ASSETTYPE",
+      "NAME"        => "ASSETNAME",
+      "NOTES"       => "NOTES",
+      "STATUS"      => "ASSETSTATUS",
+      "DATE"        => "STARTDATE",
+      "VALUE"       => "VALUE",
+      "CURRENCY_ID" => "CURRENCYID",
+      "CHANGE"      => "VALUECHANGE",
+      "CHANGE_MODE" => "VALUECHANGEMODE",
+      "CHANGE_RATE" => "VALUECHANGERATE",
+    } ) . "\n  from ASSETS_V1" .
+
+    # }}}
+    # {{{ ASSETS_V1, ATTACHMENT_V1 (REFTYPE=Asset)
+
+    "\n  union all" .
+    "\n  select " . m_select_list( $_[0], {
+      "ID"          => "e.ASSETID",
+      "TYPE_S"      => "e.ASSETTYPE",
+      "NAME_S"      => "e.ASSETNAME",
+      "ATTACH_ID"   => "ea.ATTACHMENTID",
+      "ATTACH_DESC" => "ea.DESCRIPTION",
+      "ATTACH_FILE" => "ea.FILENAME",
+    } ) .
+    "\n  from ASSETS_V1 e, ATTACHMENT_V1 ea" .
+    "\n  where ea.REFTYPE = 'Asset' and ea.REFID = e.ASSETID" .
+
+    # }}}
+    "\n) select * from e order by TYPE_S, NAME_S, ID, ATTACH_ID"
+  } ],
+
+  # }}}
+  # {{{ s (stock)
+
+  [ "s", "stock", "a", [
+    # {{{ $class, $lr, $col, $type, $format, $width
+
+    [ 0, 0, "ID",          "id",     "dc",  4 ],
+    [ 1, 0, "ACCOUNT_S",   "string", "dl", 16 ], # .ACCOUNTLIST_V1
+    [ 1, 0, "SYMBOL_S",    "string", "dl",  0 ],
+    [ 2, 0, "ACCOUNT_ID",  "id",     "dc",  4 ],
+    [ 3, 0, "ACCOUNT",     "string", "dl", 16 ], # .ACCOUNTLIST_V1
+    [ 3, 0, "SYMBOL",      "string", "dc",  0 ],
+    [ 3, 0, "NAME",        "string", "dl", 16 ],
+    [ 4, 0, "NOTES",       "string", "dl", 20 ],
+    [ 3, 0, "DATE",        "string", "dc",  0 ],
+    [ 3, 0, "NUM_SHARES",  "number", "dr",  0 ],
+    [ 3, 0, "PRICE",       "number", "dr",  0 ],
+    [ 3, 0, "VALUE",       "number", "dr",  0 ],
+    [ 3, 0, "COMMISSION",  "number", "dr",  0 ],
+    [ 3, 0, "CUR_PRICE",   "number", "dr",  0 ],
+    [ 2, 1, "ATTACH_ID",   "id",     "dc",  4 ], # .ATTACHMENT_V1
+    [ 3, 1, "ATTACH_DESC", "string", "dl", 20 ], # .ATTACHMENT_V1
+    [ 3, 1, "ATTACH_FILE", "string", "dl", 20 ], # .ATTACHMENT_V1
+
+    # }}}
+  ], sub {
+    "with s as (" .
+    # {{{ STOCK_V1
+
+    "\n  select " . m_select_list( $_[0], {
+      "ID"         => "s.STOCKID",
+      "ACCOUNT_S"  => "a.ACCOUNTNAME",
+      "SYMBOL_S"   => "s.SYMBOL",
+      "ACCOUNT_ID" => "s.HELDAT",
+      "ACCOUNT"    => "a.ACCOUNTNAME",
+      "SYMBOL"     => "s.SYMBOL",
+      "NAME"       => "s.STOCKNAME",
+      "NOTES"      => "s.NOTES",
+      "DATE"       => "s.PURCHASEDATE",
+      "NUM_SHARES" => "s.NUMSHARES",
+      "PRICE"      => "s.PURCHASEPRICE",
+      "VALUE"      => "s.VALUE",
+      "COMMISSION" => "s.COMMISSION",
+      "CUR_PRICE"  => "s.CURRENTPRICE",
+    } ) .
+    "\n  from STOCK_V1 s, ACCOUNTLIST_V1 a" .
+    "\n  where a.ACCOUNTID = s.HELDAT" .
+
+    # }}}
+    # {{{ STOCK_V1, ATTACHMENT_V1 (REFTYPE=Stock)
+
+    "\n  union all" .
+    "\n  select " . m_select_list( $_[0], {
+      "ID"          => "s.STOCKID",
+      "ACCOUNT_S"   => "a.ACCOUNTNAME",
+      "SYMBOL_S"    => "s.SYMBOL",
+      "ATTACH_ID"   => "sa.ATTACHMENTID",
+      "ATTACH_DESC" => "sa.DESCRIPTION",
+      "ATTACH_FILE" => "sa.FILENAME",
+    } ) .
+    "\n  from STOCK_V1 s, ACCOUNTLIST_V1 a, ATTACHMENT_V1 sa" .
+    "\n  where a.ACCOUNTID = s.HELDAT and sa.REFTYPE = 'Stock' and sa.REFID = s.STOCKID" .
+
+    # }}}
+    "\n) select * from s" .
+    " order by ACCOUNT_S, SYMBOL_S, ID, ATTACH_ID"
+  } ],
+
+  # }}}
+  # {{{ h (history)
+
+  [ "h", "history", "", [
+    # {{{ $class, $lr, $col, $type, $format, $width
+
+    [ 0, 0, "ID",        "number", "dc",  4 ],
+    [ 3, 0, "SYMBOL",    "string", "dl",  0 ], # UNIQUE(1)
+    [ 3, 1, "DATE",      "string", "dc",  0 ], # UNIQUE(2)
+    [ 2, 0, "UPDATE_ID", "id",     "dc",  4 ],
+    [ 3, 0, "-> UPDATE", "string", "dc",  0 ],
+    [ 3, 0, "PRICE",     "number", "dr",  0 ],
+
+    # }}}
+  ], sub {
+    "with s as (" .
+    # {{{ STOCKHISTORY_V1.SYMBOL
+
+    "\n  select distinct " . m_select_list( $_[0], {
+      "SYMBOL"    => "SYMBOL",
+    } ) . "\n  from STOCKHISTORY_V1" .
+
+    # }}}
+    # {{{ STOCKHISTORY_V1
+
+    "\n  union all" .
+    "\n  select " . m_select_list( $_[0], {
+      "ID"        => "HISTID",
+      "SYMBOL"    => "SYMBOL",
+      "DATE"      => "DATE",
+      "UPDATE_ID" => "UPDTYPE",
+      "PRICE"     => "VALUE",
+    } ) . "\n  from STOCKHISTORY_V1" .
+
+    # }}}
+    "\n) select * from s" .
+    " order by SYMBOL, DATE, ID"
+  } ],
+
+  # }}}
+  # {{{ c (category)
+
+  [ "c", "category", "", [
+    # {{{ $class, $lr, $col, $type, $format, $width
+
+    [ 0, 0, "ID",        "id",     "dc",  4 ],
+    [ 1, 0, "PARENT_ID", "id",     "dc",  4 ], # UNIQUE(2)
+    [ 1, 0, "NAME",      "string", "dl", 16 ], # UNIQUE(1)
+    [ 3, 0, "PATH",      "string", "dl", 20 ],
+    [ 4, 0, "ACTIVE",    "number", "dc",  6 ],
+
+    # }}}
+  ], sub {
+    "with recursive CATEGORY_PATH as (" .
+    # {{{ CATEGORY_V1 where PARENTID = -1
+
+    "\n  select " . m_select_list( $_[0], {
+      "ID"        => "CATEGID",
+      "PARENT_ID" => "PARENTID",
+      "NAME"      => "CATEGNAME",
+      "PATH"      => "CATEGNAME",
+      "ACTIVE"    => "ACTIVE",
+    } ) .
+    "\n  from CATEGORY_V1 where PARENTID = '-1'" .
+
+    # }}}
+    # {{{ CATEGORY_V1, CATEGORY_PATH
+
+    "\n  union all" .
+    "\n  select " . m_select_list( $_[0], {
+      "ID"        => "c.CATEGID",
+      "PARENT_ID" => "c.PARENTID",
+      "NAME"      => "c.CATEGNAME",
+      "PATH"      => "cp.PATH || ':' || c.CATEGNAME",
+      "ACTIVE"    => "c.ACTIVE",
+    } ) .
+    "\n  from CATEGORY_V1 c, CATEGORY_PATH cp" .
+    "\n  where c.PARENTID = cp.ID" .
+
+    # }}}
+    "\n) select * from CATEGORY_PATH order by PATH"
+  } ],
+
+  # }}}
+  # {{{ p (payee)
+
+  [ "p", "payee", "c", [
+    # {{{ $class, $lr, $col, $type, $format, $width
+
+    [ 0, 0, "ID",          "id",     "dc",  4 ],
+    [ 1, 0, "NAME_S",      "string", "dl", 16 ],
+    [ 3, 0, "NAME",        "string", "dl", 16 ], # UNIQUE
+    [ 4, 0, "NOTES",       "string", "dl", 20 ],
+    [ 4, 0, "ACTIVE",      "number", "dc",  6 ],
+    [ 4, 0, "NUMBER",      "string", "dl", 16 ],
+    [ 2, 0, "CATEGORY_ID", "id",     "dc",  4 ],
+    [ 3, 0, "-> CATEGORY", "string", "dl", 20 ], # .CATEGORY_V1
+    [ 4, 0, "WEBSITE",     "string", "dl", 20 ],
+    [ 4, 0, "PATTERN",     "string", "dl",  0 ],
+    [ 2, 1, "ATTACH_ID",   "id",     "dc",  4 ], # .ATTACHMENT_V1
+    [ 3, 1, "ATTACH_DESC", "string", "dl", 20 ], # .ATTACHMENT_V1
+    [ 3, 1, "ATTACH_FILE", "string", "dl", 20 ], # .ATTACHMENT_V1
+
+    # }}}
+  ], sub {
+    "with p as (" .
+    # {{{ PAYEE_V1
+
+    "\n  select " . m_select_list( $_[0], {
+      "ID"          => "PAYEEID",
+      "NAME_S"      => "PAYEENAME",
+      "NAME"        => "PAYEENAME",
+      "NOTES"       => "NOTES",
+      "ACTIVE"      => "ACTIVE",
+      "NUMBER"      => "NUMBER",
+      "CATEGORY_ID" => "CATEGID",
+      "WEBSITE"     => "WEBSITE",
+      "PATTERN" => "PATTERN",
+    } ) . "\n  from PAYEE_V1" .
+
+    # }}}
+    # {{{ PAYEE_V1, ATTACHMENT_V1 (REFTYPE=Payee)
+
+    "\n  union all" .
+    "\n  select " . m_select_list( $_[0], {
+      "ID"          => "p.PAYEEID",
+      "NAME_S"      => "p.PAYEENAME",
+      "ATTACH_ID"   => "pa.ATTACHMENTID",
+      "ATTACH_DESC" => "pa.DESCRIPTION",
+      "ATTACH_FILE" => "pa.FILENAME",
+    } ) .
+    "\n  from PAYEE_V1 p, ATTACHMENT_V1 pa" .
+    "\n  where pa.REFTYPE = 'Payee' and pa.REFID = p.PAYEEID" .
+
+    # }}}
+    "\n) select * from p order by NAME_S, ID, ATTACH_ID"
+  } ],
+
+  # }}}
+  # {{{ g (tag)
+
+  [ "g", "tag", "", [
+    # {{{ $class, $lr, $col, $type, $format, $width
+
+    [ 0, 0, "ID",     "number", "dc",  4 ],
+    [ 3, 0, "NAME",   "string", "dl", 16 ], # UNIQUE
+    [ 4, 0, "ACTIVE", "number", "dc",  6 ],
+
+    # }}}
+  ], sub {
+    # {{{ TAG_V1
+
+    "select " . m_select_list( $_[0], {
+      "ID"     => "TAGID",
+      "NAME"   => "TAGNAME",
+      "ACTIVE" => "ACTIVE",
+    } ) . "\nfrom TAG_V1 order by NAME, ID"
+
+    # }}}
+  } ],
+
+  # }}}
+  # {{{ f (field)
+
+  [ "f", "field", "", [
+    # {{{ $class, $lr, $col, $type, $format, $width
+
+    [ 0, 0, "ID",         "number", "dc",  4 ],
+    [ 3, 0, "REF_TYPE",   "string", "dl", 20 ],
+    [ 3, 0, "NAME",       "string", "dl", 20 ],
+    [ 3, 0, "TYPE",       "string", "dl",  0 ],
+    [ 4, 0, "PROPERTIES", "string", "dl", 20 ],
+
+    # }}}
+  ], sub {
+    # {{{ CUSTOMFIELD_V1
+
+    "select " . m_select_list( $_[0], {
+      "ID"         => "FIELDID",
+      "REF_TYPE"   => "REFTYPE",
+      "NAME"       => "DESCRIPTION",
+      "TYPE"       => "TYPE",
+      "PROPERTIES" => "PROPERTIES",
+    } ) . "\nfrom CUSTOMFIELD_V1 order by REF_TYPE, NAME"
+
+    # }}}
+  } ],
+
+  # }}}
+  # {{{ t (transactions)
+  # {{{ note: database assertions
+
+  # TRANSAMOUNT >= 0
+  # TRANSCODE eq "Transfer" ==> PAYEEID     == -1, TOTRANSAMOUNT == TRANSAMOUNT
+  # TRANSCODE ne "Transfer" ==> TOACCOUNTID == (-1, 32701, 32702)
+
+  # }}}
+
+  [ "t", "transactions", "aescpgf", [
+    # {{{ $class, $lr, $col, $type, $format, $width
+
+    [ 0, 0, "ID",               "id",     "dc",  4 ],
+    [ 1, 0, "DATE0_S",          "string", "dc", 16 ],
+    [ 2, 0, "DATE0",            "string", "dc", 16 ],
+    [ 3, 0, "-> DATE",          "string", "dc",  0 ],
+    [ 4, 0, "NUMBER",           "string", "dc",  6 ],
+    [ 3, 0, "STATUS",           "string", "dc",  6 ],
+    [ 3, 0, "CODE",             "string", "dc",  0 ],
+    [ 2, 0, "ACCOUNT_ID",       "id",     "dc",  4 ],
+    [ 3, 0, "-> ACCOUNT",       "string", "dl", 16 ], # .ACCOUNTLIST_V1
+    [ 2, 0, "TO_ACCOUNT_ID",    "id",     "dc",  4 ],
+    [ 3, 0, "-> TO_ACCOUNT",    "string", "dl", 16 ], # .ACCOUNTLIST_V1
+    [ 2, 0, "PAYEE_ID",         "id",     "dc",  4 ],
+    [ 3, 0, "-> PAYEE",         "string", "dl", 20 ], # .PAYEE_V1
+    [ 2, 1, "SPLIT_ID",         "id",     "dc",  4 ], # .SPLITTRANSACTIONS_V1
+    [ 2, 0, "CATEGORY_ID",      "id",     "dc",  4 ], # :SPLITTRANSACTIONS_V1
+    [ 3, 0, "-> CATEGORY",      "string", "dl", 20 ], # .CATEGORY_V1
+    [ 4, 0, "NOTES",            "string", "dl", 20 ], # :SPLITTRANSACTIONS_V1
+    [ 3, 0, "AMOUNT",           "number", "dr",  0 ], # :SPLITTRANSACTIONS_V1
+    [ 3, 0, "TO_AMOUNT",        "number", "dr",  0 ],
+    [ 4, 0, "UPDATED_TIME",     "string", "dc", 16 ],
+    [ 4, 0, "DELETED_TIME",     "string", "dc", 16 ],
+    [ 4, 0, "FOLLOWUP_ID",      "number", "dc",  4 ],
+    [ 4, 0, "COLOR",            "number", "dc",  0 ],
+    [ 2, 1, "CUSTOM_ID",        "number", "dc",  4 ], # .CUSTOMFIELDDATA_V1
+    [ 2, 1, "FIELD_ID",         "id",     "dc",  4 ], # .CUSTOMFIELDDATA_V1
+    [ 3, 1, "FIELD",            "string", "dl", 20 ], # .CUSTOMFIELD_V1
+    [ 3, 1, "CONTENT",          "number", "dl", 16 ], # .CUSTOMFIELDDATA_V1
+    [ 2, 1, "LINK_ID",          "id",     "dc",  4 ], # .TRANSLINK_V1
+    [ 3, 1, "LINK_TYPE",        "string", "dl",  0 ], # .TRANSLINK_V1
+    [ 2, 1, "LINK_REC_ID",      "id",     "dc",  4 ], # .TRANSLINK_V1
+    [ 3, 1, "ASSET_NAME",       "string", "dl", 20 ], # .ASSETS_V1
+    [ 3, 1, "ASSET_DATE",       "string", "dc",  0 ], # .ASSETS_V1
+    [ 3, 1, "STOCK_NAME",       "string", "dl", 16 ], # .STOCK_V1
+    [ 3, 1, "STOCK_DATE",       "string", "dc",  0 ], # .STOCK_V1
+    [ 2, 1, "SHARE_ID",         "id",     "dc",  4 ], # .SHAREINFO_V1
+    [ 3, 1, "SHARE_NUMBER",     "number", "dr",  0 ], # .SHAREINFO_V1
+    [ 3, 1, "SHARE_PRICE",      "number", "dr",  0 ], # .SHAREINFO_V1
+    [ 3, 1, "SHARE_COMMISSION", "number", "dr",  0 ], # .SHAREINFO_V1
+    [ 4, 1, "SHARE_LOT",        "string", "dl",  0 ], # .SHAREINFO_V1
+    [ 2, 1, "ATTACH_ID",        "id",     "dc",  4 ], # .ATTACHMENT_V1
+    [ 3, 1, "ATTACH_DESC",      "string", "dl", 20 ], # .ATTACHMENT_V1
+    [ 3, 1, "ATTACH_FILE",      "string", "dl", 20 ], # .ATTACHMENT_V1
+    [ 2, 1, "TAGLINK_ID",       "number", "dc",  4 ], # .TAGLINK_V1
+    [ 2, 1, "TAG_ID",           "id",     "dc",  4 ], # .TAGLINK_V1
+    [ 3, 1, "-> TAG",           "string", "dl",  0 ], # .TAG_V1
+
+    # }}}
+  ], sub {
+    "with t as (" .
+    # {{{ CHECKINGACCOUNT_V1
+
+    "\n  select " . m_select_list( $_[0], {
+      "ID"            => "TRANSID",
+      "DATE0_S"       => "TRANSDATE",
+      "DATE0"         => "TRANSDATE",
+      "NUMBER"        => "TRANSACTIONNUMBER",
+      "STATUS"        => "STATUS",
+      "CODE"          => "TRANSCODE",
+      "ACCOUNT_ID"    => "ACCOUNTID",
+      "TO_ACCOUNT_ID" => "TOACCOUNTID",
+      "PAYEE_ID"      => "PAYEEID",
+      "CATEGORY_ID"   => "CATEGID",
+      "NOTES"         => "NOTES",
+      "AMOUNT"        => "TRANSAMOUNT",
+      "TO_AMOUNT"     => "TOTRANSAMOUNT",
+      "UPDATED_TIME"  => "LASTUPDATEDTIME",
+      "DELETED_TIME"  => "DELETEDTIME",
+      "FOLLOWUP_ID"   => "FOLLOWUPID",
+      "COLOR"         => "COLOR",
+    } ) . "\n  from CHECKINGACCOUNT_V1" .
+
+    # }}}
+    # {{{ CHECKINGACCOUNT_V1, CUSTOMFIELDDATA_V1
+
+    "\n  union all" .
+    "\n  select " . m_select_list( $_[0], {
+      "ID"        => "t.TRANSID",
+      "DATE0_S"   => "t.TRANSDATE",
+      "CUSTOM_ID" => "tf.FIELDATADID",
+      "FIELD_ID"  => "tf.FIELDID",
+      "FIELD"     => "f.DESCRIPTION",
+      "CONTENT"   => "tf.CONTENT",
+    } ) .
+    "\n  from CHECKINGACCOUNT_V1 t, CUSTOMFIELDDATA_V1 tf, CUSTOMFIELD_V1 f" .
+    "\n  where tf.REFID = t.TRANSID and f.FIELDID = tf.FIELDID" .
+
+    # }}}
+    # {{{ CHECKINGACCOUNT_V1, TRANSLINK_V1, ASSETS_V1
+
+    "\n  union all" .
+    "\n  select " . m_select_list( $_[0], {
+      "ID"          => "t.TRANSID",
+      "DATE0_S"     => "t.TRANSDATE",
+      "LINK_ID"     => "tl.TRANSLINKID",
+      "LINK_TYPE"   => "tl.LINKTYPE",
+      "LINK_REC_ID" => "tl.LINKRECORDID",
+      "ASSET_NAME"  => "ta.ASSETNAME",
+      "ASSET_DATE"  => "ta.STARTDATE",
+    } ) .
+    "\n  from CHECKINGACCOUNT_V1 t, TRANSLINK_V1 tl, ASSETS_V1 ta" .
+    "\n  where tl.CHECKINGACCOUNTID = t.TRANSID" .
+      " and tl.LINKTYPE = 'Asset' and tl.LINKRECORDID = ta.ASSETID" .
+
+    # }}}
+    # {{{ CHECKINGACCOUNT_V1, TRANSLINK_V1, STOCK_V1
+
+    "\n  union all" .
+    "\n  select " . m_select_list( $_[0], {
+      "ID"           => "t.TRANSID",
+      "DATE0_S"      => "t.TRANSDATE",
+      "LINK_ID"      => "tl.TRANSLINKID",
+      "LINK_TYPE"    => "tl.LINKTYPE",
+      "LINK_REC_ID"  => "tl.LINKRECORDID",
+      "STOCK_NAME"   => "ts.STOCKNAME",
+      "STOCK_DATE"   => "ts.PURCHASEDATE",
+    } ) .
+    "\n  from CHECKINGACCOUNT_V1 t, TRANSLINK_V1 tl, STOCK_V1 ts" .
+    "\n  where tl.CHECKINGACCOUNTID = t.TRANSID" .
+      " and tl.LINKTYPE = 'Stock' and tl.LINKRECORDID = ts.STOCKID" .
+
+    # }}}
+    # {{{ CHECKINGACCOUNT_V1, SHAREINFO_V1
+
+    "\n  union all" .
+    "\n  select " . m_select_list( $_[0], {
+      "ID"               => "t.TRANSID",
+      "DATE0_S"          => "t.TRANSDATE",
+      "SHARE_ID"         => "ts.SHAREINFOID",
+      "SHARE_NUMBER"     => "ts.SHARENUMBER",
+      "SHARE_PRICE"      => "ts.SHAREPRICE",
+      "SHARE_COMMISSION" => "ts.SHARECOMMISSION",
+      "SHARE_LOT"        => "ts.SHARELOT",
+    } ) .
+    "\n  from CHECKINGACCOUNT_V1 t, SHAREINFO_V1 ts" .
+    "\n  where ts.CHECKINGACCOUNTID = t.TRANSID" .
+
+    # }}}
+    # {{{ CHECKINGACCOUNT_V1, ATTACHMENT_V1 (REFTYPE=Transaction)
+
+    "\n  union all" .
+    "\n  select " . m_select_list( $_[0], {
+      "ID"          => "t.TRANSID",
+      "DATE0_S"     => "t.TRANSDATE",
+      "ATTACH_ID"   => "ta.ATTACHMENTID",
+      "ATTACH_DESC" => "ta.DESCRIPTION",
+      "ATTACH_FILE" => "ta.FILENAME",
+    } ) .
+    "\n  from CHECKINGACCOUNT_V1 t, ATTACHMENT_V1 ta" .
+    "\n  where ta.REFTYPE = 'Transaction' and ta.REFID = t.TRANSID" .
+
+    # }}}
+    # {{{ CHECKINGACCOUNT_V1, TAGLINK_V1 (REFTYPE=Transaction)
+
+    "\n  union all" .
+    "\n  select " . m_select_list( $_[0], {
+      "ID"         => "t.TRANSID",
+      "DATE0_S"    => "t.TRANSDATE",
+      "TAGLINK_ID" => "tt.TAGLINKID",
+      "TAG_ID"     => "tt.TAGID",
+    } ) .
+    "\n  from CHECKINGACCOUNT_V1 t, TAGLINK_V1 tt" .
+    "\n  where tt.REFTYPE = 'Transaction' and tt.REFID = t.TRANSID" .
+
+    # }}}
+    # {{{ CHECKINGACCOUNT_V1, SPLITTRANSACTIONS_V1
+
+    "\n  union all" .
+    "\n  select " .  m_select_list( $_[0], {
+      "ID"          => "t.TRANSID",
+      "DATE0_S"     => "t.TRANSDATE",
+      "SPLIT_ID"    => "ts.SPLITTRANSID",
+      "CATEGORY_ID" => "ts.CATEGID",
+      "NOTES"       => "ts.NOTES",
+      "AMOUNT"      => "ts.SPLITTRANSAMOUNT",
+    } ) .
+    "\n  from CHECKINGACCOUNT_V1 t, SPLITTRANSACTIONS_V1 ts" .
+    "\n  where t.TRANSID = ts.TRANSID" .
+
+    # }}}
+    # {{{ CHECKINGACCOUNT_V1, SPLITTRANSACTIONS_V1, TAGLINK_V1 (REFTYPE=TransactionSplit)
+
+    "\n  union all" .
+    "\n  select " . m_select_list( $_[0], {
+      "ID"         => "t.TRANSID",
+      "DATE0_S"    => "t.TRANSDATE",
+      "SPLIT_ID"   => "ts.SPLITTRANSID",
+      "TAGLINK_ID" => "tt.TAGLINKID",
+      "TAG_ID"     => "tt.TAGID",
+    } ) .
+    "\n  from CHECKINGACCOUNT_V1 t, SPLITTRANSACTIONS_V1 ts, TAGLINK_V1 tt" .
+    "\n  where t.TRANSID = ts.TRANSID" .
+      " and tt.REFTYPE = 'TransactionSplit' and tt.REFID = ts.SPLITTRANSID" .
+
+    # }}}
+    "\n) select * from t" .
+    " order by DATE0_S, ID, SPLIT_ID, CUSTOM_ID, SHARE_ID, LINK_ID, ATTACH_ID, TAGLINK_ID"
+  } ],
+
+  # }}}
+  # {{{ r (recurring)
+
+  [ "r", "recurring", "acpgf", [
+    # {{{ $class, $lr, $col, $type, $format, $width
+
+    [ 0, 0, "ID",              "id",     "dc",  4 ],
+    [ 1, 0, "DATE0_S",         "string", "dc", 16 ],
+    [ 2, 0, "DATE0",           "string", "dc", 16 ],
+    [ 3, 0, "-> DATE",         "string", "dc",  0 ],
+    [ 4, 0, "NEXT_DATE",       "string", "dc",  0 ],
+    [ 4, 0, "NUMBER",          "string", "dc",  0 ],
+    [ 3, 0, "STATUS",          "string", "dc",  6 ],
+    [ 3, 0, "CODE",            "string", "dc",  0 ],
+    [ 2, 0, "ACCOUNT_ID",      "id",     "dc",  4 ],
+    [ 3, 0, "-> ACCOUNT",      "string", "dl", 16 ], # .ACCOUNTLIST_V1
+    [ 2, 0, "TO_ACCOUNT_ID",   "id",     "dc",  4 ],
+    [ 3, 0, "-> TO_ACCOUNT",   "string", "dl", 16 ], # .ACCOUNTLIST_V1
+    [ 2, 0, "PAYEE_ID",        "id",     "dc",  4 ],
+    [ 3, 0, "-> PAYEE",        "string", "dl", 20 ], # .PAYEE_V1
+    [ 2, 1, "SPLIT_ID",        "id",     "dc",  4 ], # .BUDGETSPLITTRANSACTIONS_V1
+    [ 2, 0, "CATEGORY_ID",     "id",     "dc",  4 ], # :BUDGETSPLITTRANSACTIONS_V1
+    [ 3, 0, "-> CATEGORY",     "string", "dl", 20 ], # .CATEGORY_V1
+    [ 4, 0, "NOTES",           "string", "dl", 20 ], # :BUDGETSPLITTRANSACTIONS_V1
+    [ 3, 0, "AMOUNT",          "number", "dr",  0 ], # :BUDGETSPLITTRANSACTIONS_V1
+    [ 3, 0, "TO_AMOUNT",       "number", "dr",  0 ],
+    [ 2, 0, "REPEATS_ID",      "id",     "dc",  4 ],
+    [ 3, 0, "-> REPEATS_AUTO", "string", "dc",  0 ],
+    [ 3, 0, "-> REPEATS_FREQ", "string", "dl", 12 ],
+    [ 3, 0, "REPEATS_NUM",     "number", "dc",  0 ],
+    [ 4, 0, "FOLLOWUP_ID",     "number", "dc",  4 ],
+    [ 4, 0, "COLOR",           "number", "dc",  0 ],
+    [ 2, 1, "CUSTOM_ID",       "id",     "dc",  4 ], # .CUSTOMFIELDDATA_V1
+    [ 2, 1, "FIELD_ID",        "id",     "dc",  4 ], # .CUSTOMFIELDDATA_V1
+    [ 3, 1, "FIELD",           "string", "dl", 20 ], # .CUSTOMFIELD_V1
+    [ 3, 1, "CONTENT",         "number", "dl", 16 ], # .CUSTOMFIELDDATA_V1
+    [ 2, 1, "ATTACH_ID",       "id",     "dc",  4 ], # .ATTACHMENT_V1
+    [ 3, 1, "ATTACH_DESC",     "string", "dl", 20 ], # .ATTACHMENT_V1
+    [ 3, 1, "ATTACH_FILE",     "string", "dl", 20 ], # .ATTACHMENT_V1
+    [ 2, 1, "TAGLINK_ID",      "id",     "dc",  4 ], # .TAGLINK_V1
+    [ 2, 1, "TAG_ID",          "id",     "dc",  4 ], # .TAGLINK_V1
+    [ 3, 1, "-> TAG",          "string", "dl",  0 ], # .TAG_V1
+
+    # }}}
+  ], sub {
+    "with r as (" .
+    # {{{ BILLSDEPOSITS_V1
+
+    "\n  select " . m_select_list( $_[0], {
+      "ID"            => "BDID",
+      "DATE0_S"       => "TRANSDATE",
+      "DATE0"         => "TRANSDATE",
+      "NEXT_DATE"     => "NEXTOCCURRENCEDATE",
+      "NUMBER"        => "TRANSACTIONNUMBER",
+      "STATUS"        => "STATUS",
+      "CODE"          => "TRANSCODE",
+      "ACCOUNT_ID"    => "ACCOUNTID",
+      "TO_ACCOUNT_ID" => "TOACCOUNTID",
+      "PAYEE_ID"      => "PAYEEID",
+      "CATEGORY_ID"   => "CATEGID",
+      "NOTES"         => "NOTES",
+      "AMOUNT"        => "TRANSAMOUNT",
+      "TO_AMOUNT"     => "TOTRANSAMOUNT",
+      "REPEATS_ID"    => "REPEATS",
+      "REPEATS_NUM"   => "NUMOCCURRENCES",
+      "FOLLOWUP_ID"   => "FOLLOWUPID",
+      "COLOR"         => "COLOR",
+    } ) . "\n  from BILLSDEPOSITS_V1" .
+
+    # }}}
+    # {{{ BILLSDEPOSITS_V1, CUSTOMFIELDDATA_V1
+
+    "\n  union all" .
+    "\n  select " . m_select_list( $_[0], {
+      "ID"        => "r.BDID",
+      "DATE0_S"   => "r.TRANSDATE",
+      "CUSTOM_ID" => "rf.FIELDATADID",
+      "FIELD_ID"  => "rf.FIELDID",
+      "FIELD"     => "f.DESCRIPTION",
+      "CONTENT"   => "rf.CONTENT",
+    } ) .
+    "\n  from BILLSDEPOSITS_V1 r, CUSTOMFIELDDATA_V1 rf, CUSTOMFIELD_V1 f" .
+    "\n  where rf.REFID = - r.BDID and f.FIELDID = rf.FIELDID" .
+
+    # }}}
+    # {{{ BILLSDEPOSITS_V1, ATTACHMENT_V1 (REFTYPE = RecurringTransaction)
+
+    "\n  union all" .
+    "\n  select " . m_select_list( $_[0], {
+      "ID"          => "r.BDID",
+      "DATE0_S"     => "r.TRANSDATE",
+      "ATTACH_ID"   => "ra.ATTACHMENTID",
+      "ATTACH_DESC" => "ra.DESCRIPTION",
+      "ATTACH_FILE" => "ra.FILENAME",
+    } ) .
+    "\n  from BILLSDEPOSITS_V1 r, ATTACHMENT_V1 ra" .
+    "\n  where ra.REFTYPE = 'RecurringTransaction' and ra.REFID = r.BDID" .
+
+    # }}}
+    # {{{ BILLSDEPOSITS_V1, TAGLINK_V1 (REFTYPE = RecurringTransaction)
+
+    "\n  union all" .
+    "\n  select " . m_select_list( $_[0], {
+      "ID"         => "r.BDID",
+      "DATE0_S"    => "r.TRANSDATE",
+      "TAGLINK_ID" => "rt.TAGLINKID",
+      "TAG_ID"     => "rt.TAGID",
+    } ) .
+    "\n  from BILLSDEPOSITS_V1 r, TAGLINK_V1 rt" .
+    "\n  where rt.REFTYPE = 'RecurringTransaction' and rt.REFID = BDID" .
+
+    # }}}
+    # {{{ BILLSDEPOSITS_V1, BUDGETSPLITTRANSACTIONS_V1
+
+    "\n  union all" .
+    "\n  select " . m_select_list( $_[0], {
+      "ID"          => "r.BDID",
+      "DATE0_S"     => "r.TRANSDATE",
+      "SPLIT_ID"    => "rs.SPLITTRANSID",
+      "CATEGORY_ID" => "rs.CATEGID",
+      "NOTES"       => "rs.NOTES",
+      "AMOUNT"      => "rs.SPLITTRANSAMOUNT",
+    } ) .
+    "\n  from BILLSDEPOSITS_V1 r, BUDGETSPLITTRANSACTIONS_V1 rs" .
+    "\n  where r.BDID = rs.TRANSID" .
+
+    # }}}
+    # {{{ BILLSDEPOSITS_V1, BUDGETSPLITTRANSACTIONS_V1, TAGLINK_V1 (REFTYPE = RecurringTransactionSplit)
+
+    "\n  union all" .
+    "\n  select " . m_select_list( $_[0], {
+      "ID"         => "r.BDID",
+      "DATE0_S"    => "r.TRANSDATE",
+      "SPLIT_ID"   => "rs.SPLITTRANSID",
+      "TAGLINK_ID" => "rt.TAGLINKID",
+      "TAG_ID"     => "rt.TAGID",
+    } ) .
+    "\n  from BILLSDEPOSITS_V1 r, BUDGETSPLITTRANSACTIONS_V1 rs, TAGLINK_V1 rt" .
+    "\n  where r.BDID = rs.TRANSID" .
+      " and rt.REFTYPE = 'RecurringTransactionSplit' and rt.REFID = rs.SPLITTRANSID" .
+
+    # }}}
+    "\n) select * from r" .
+    " order by DATE0_S, ID, SPLIT_ID, CUSTOM_ID, ATTACH_ID, TAGLINK_ID"
+  } ],
+
+  # }}}
+  # {{{ y (year)
+
+  [ "y", "year", "", [
+    # {{{ $class, $lr, $col, $type, $format, $width
+
+    [ 0, 0, "ID",   "id",     "dc",  4 ],
+    [ 3, 0, "NAME", "string", "dl", 16 ], # UNIQUE
+
+    # }}}
+  ], sub {
+    # {{{ BUDGETYEAR_V1
+
+    "select " . m_select_list( $_[0], {
+      "ID"   => "BUDGETYEARID",
+      "NAME" => "BUDGETYEARNAME",
+    } ) . "\nfrom BUDGETYEAR_V1 order by NAME, ID"
+
+    # }}}
+  } ],
+
+  # }}}
+  # {{{ b (budget)
+
+  [ "b", "budget", "cy", [
+    # {{{ $class, $lr, $col, $type, $format, $width
+
+    [ 0, 0, "ID",          "id",     "dc",  4 ],
+    [ 2, 0, "YEAR_ID",     "id",     "dc",  4 ],
+    [ 3, 0, "YEAR",        "string", "dl",  0 ], # .BUDGETYEAR_V1
+    [ 2, 0, "CATEGORY_ID", "id",     "dc",  4 ],
+    [ 3, 0, "CATEGORY",    "string", "dl", 20 ], # .CATEGORY_V1
+    [ 4, 0, "NOTES",       "string", "dl", 20 ],
+    [ 4, 0, "ACTIVE",      "number", "dc",  6 ],
+    [ 3, 0, "PERIOD",      "string", "dl", 16 ],
+    [ 3, 0, "AMOUNT",      "number", "dr",  0 ],
+
+    # }}}
+  ], sub {
+    "with recursive CATEGORY_PATH as (" .
+    # {{{ CATEGORY_V1 where PARENTID = -1
+
+    "\n  select " . m_select_list( [ "ID", "PARENT_ID", "NAME", "PATH" ], {
+      "ID"        => "CATEGID",
+      "PARENT_ID" => "PARENTID",
+      "NAME"      => "CATEGNAME",
+      "PATH"      => "CATEGNAME",
+    } ) .
+    "\n  from CATEGORY_V1 where PARENTID = '-1'" .
+
+    # }}}
+    # {{{ CATEGORY_V1, CATEGORY_PATH
+
+    "\n  union all" .
+    "\n  select " . m_select_list( [ "ID", "PARENT_ID", "NAME", "PATH" ], {
+      "ID"        => "c.CATEGID",
+      "PARENT_ID" => "c.PARENTID",
+      "NAME"      => "c.CATEGNAME",
+      "PATH"      => "cp.PATH || ':' || c.CATEGNAME",
+    } ) .
+    "\n  from CATEGORY_V1 c, CATEGORY_PATH cp" .
+    "\n  where c.PARENTID = cp.ID" .
+
+    # }}}
+    "\n)" .
+    # {{{ BUDGETTABLE_V1
+
+    "\nselect " . m_select_list( $_[0], {
+      "ID"          => "b.BUDGETENTRYID",
+      "YEAR_ID"     => "b.BUDGETYEARID",
+      "YEAR"        => "y.BUDGETYEARNAME",
+      "CATEGORY_ID" => "b.CATEGID",
+      "CATEGORY"    => "cp.PATH",
+      "NOTES"       => "b.NOTES",
+      "ACTIVE"      => "b.ACTIVE",
+      "PERIOD"      => "b.PERIOD",
+      "AMOUNT"      => "b.AMOUNT",
+    } ) . "\nfrom BUDGETTABLE_V1 b, BUDGETYEAR_V1 y, CATEGORY_PATH cp" .
+    "\nwhere y.BUDGETYEARID = b.BUDGETYEARID and cp.ID = b.CATEGID" .
+    "\norder by YEAR, CATEGORY"
+
+    # }}}
+  } ],
+
+  # }}}
+  # {{{ o (report)
+
+  [ "o", "report", "", [
+    # {{{ $class, $lr, $col, $type, $format, $width
+
+    [ 0, 0, "ID",          "id",     "dc",  4 ],
+    [ 3, 0, "NAME",        "string", "dl", 20 ], # UNIQUE
+    [ 3, 0, "GROUP_NAME",  "string", "dl", 16 ],
+    [ 4, 0, "ACTIVE",      "number", "dc",  6 ],
+    [ 3, 0, "SQL",         "string", "dl", 20 ],
+    [ 3, 0, "LUA",         "string", "dl", 20 ],
+    [ 3, 0, "TEMPLATE",    "string", "dl", 20 ],
+    [ 3, 0, "DESCRIPTION", "string", "dl", 20 ],
+
+    # }}}
+  ], sub {
+    # {{{ REPORT_V1
+
+    "select " . m_select_list( $_[0], {
+      "ID"          => "REPORTID",
+      "NAME"        => "REPORTNAME",
+      "GROUP_NAME"  => "GROUPNAME",
+      "ACTIVE"      => "ACTIVE",
+      "SQL"         => "SQLCONTENT",
+      "LUA"         => "LUACONTENT",
+      "TEMPLATE"    => "TEMPLATECONTENT",
+      "DESCRIPTION" => "DESCRIPTION",
+    } ) . "\nfrom REPORT_V1 order by NAME"
+
+    # }}}
+  } ],
+
+  # }}}
+);
+# {{{ indexes
+
+my @o_sheet_a      = ();  # ( $sheet, ... )
+my %o_sheet_p      = ();  # ( $sheet => 1 )
+my %o_sheet_name   = ();  # ( $sheet => $name )
+my %o_sheet_dep_l  = ();  # ( $sheet => [ $dep, ... ] )
+my %o_sheet_col_sa = ();  # ( $sheet => [ $col_s, ... ] )
+my %o_sheet_select = ();  # ( $sheet => $select )
+
+for( @o_sheet_sa ) { my( $sheet, $name, $dep_l, $col_sa, $select ) = @$_;
+  push( @o_sheet_a, $sheet );
+  $o_sheet_p{$sheet}      = 1;
+  $o_sheet_name{$sheet}   = $name;
+  $o_sheet_dep_l{$sheet}  = [ split( //, $dep_l ) ];
+  $o_sheet_col_sa{$sheet} = $col_sa;
+  $o_sheet_select{$sheet} = $select;
+}
+
+# non-separated list of sheet codes
+my $o_sheet_l = join( "", @o_sheet_a );
+
+# }}}
+
+# {{{ output column class flags
+
+# %o_class_flag : ( $flag => \@class_a )
+
+# $flag    : (string) single-letter flag
+# @class_a : ( $class, ... )
+# $class   : 0: rowid, 1: sort, 2: id
+
+# the output (-o) command-line flag -c$flag enables each output column class
+# in @class_a. the columns of class 3 (data), 4 (outline) are always enabled.
+
+# }}}
+my %o_class_flag = (
+  # {{{ $flag => [ $class, ... ]
+
+  a => [ 0, 1, 2 ],  # all
+  i => [ 0,    2 ],  # rowid and id
+  p => [ 0       ],  # rowid (primary id)
+  s => [    1    ],  # sort
+
+  # }}}
+);
+
+# }}}
+# {{{ var
+
+# shared flags for output (-o) and input (-i)
+my $x_file;        # (string) XLSX filename for output/input
+my @x_sheet_a;     # ( $sheet, ... ) order of sheets in %x_sheet_name
+my %x_sheet_name;  # ( $sheet => $name )
+
+# enable for each output column class
+my @o_class_f;     # ( 0: rowid, 1: sort, 2: id, 3: data, 4: outline ) -> boolean
+
+# }}}
+
+# {{{ sub x_sheet_all( $inc_i=0 )
+# add all worksheets into @x_sheet_a, %x_sheet_name
+# if $cmd is "i" and $inc_i==0, exclude worksheet i
+
+sub x_sheet_all { my( $inc_i ) = @_;
+  for my $sheet ( @o_sheet_a ) {
+    next if $sheet eq "i" && $cmd eq "i" && ! $inc_i;
+    if( exists $x_sheet_name{$sheet} ) {
+      if( $warn_level >= 1 ) {
+        log_warn( "worksheet $sheet is already selected\n" );
+      }
+    } else {
+      push( @x_sheet_a, $sheet );
+      $x_sheet_name{$sheet} = $o_sheet_name{$sheet};
+    }
+  }
+}
+
+# }}}
+# {{{ sub x_sheet_dep( \@sheet_a )
+# add all sheets in @sheet_a and their dependencies into @x_sheet_a, %x_sheet_name
+# re-order @x_sheet_a in dependency order
+
+sub x_sheet_dep { my( $sheet_a ) = @_;
+  #log_debugf( ": sheet_a: [" . join( ", ", @$sheet_a ) . "]\n" );
+  # {{{ %sheet_done: collect all sheets in @$sheet_a and their dependencies
+
+  my @sheet_todo = ( @$sheet_a );
+  my %sheet_done = ();
+
+  while( @sheet_todo > 0 ) {
+    my $sheet = shift( @sheet_todo );
+    next if exists $sheet_done{$sheet};
+    $sheet_done{$sheet} = 1;
+    for my $dep ( @{ $o_sheet_dep_l{$sheet} } ) {
+      next if exists $sheet_done{$dep};
+      push( @sheet_todo, $dep );
+    }
+  }
+  #log_debugf( ": sheet_done: [" . join( ", ", keys %sheet_done ) . "]\n" );
+
+  # }}}
+  # {{{ @x_sheet_a, %x_sheet_name: add sheets in %sheet_done if not already added
+
+  for my $sheet ( keys %sheet_done ) {
+    next if exists $x_sheet_name{$sheet};
+    push( @x_sheet_a, $sheet );
+    $x_sheet_name{$sheet} = $o_sheet_name{$sheet};
+  }
+  #log_debugf( ": x_sheet_a: [" . join( ", ", @x_sheet_a ) . "]\n" );
+
+  # }}}
+  # {{{ @x_sheet_a, $n: re-order in dependecy order
+
+  my $n = @x_sheet_a;
+
+  @x_sheet_a = ();
+  for ( @o_sheet_sa ) { my $sheet = $_->[0];
+    next unless exists $x_sheet_name{$sheet};
+    push( @x_sheet_a, $sheet );
+  }
+
+  # }}}
+  # {{{ @x_sheet_a: check size after re-order
+
+  my $n1 = @x_sheet_a;
+  if( $n1 != $n ) {
+    log_checkf( ": x_sheet_a size changed from $n to $n1\n" );
+  }
+
+  # }}}
+}
+
+# }}}
+# {{{ sub x_log_args()
+
+sub x_log_args {
+  log_debugf( ": cmd=$cmd, x_file=[$x_file]\n" );
+  for my $sheet ( @x_sheet_a ) {
+    my $name = $x_sheet_name{$sheet};
+    log_debug( "  sheet=$sheet, name=[$name]\n" );
+  }
+}
+
+# }}}
+
+# {{{ sub o_wb_format( $wb ) -> \%format_a
+
+sub o_wb_format { my( $wb ) = @_;
+  my %format_a = ();
+
+  # create formats for [ header, data, error ] * [ l, c, r ]
+  for my $n1 ( "h", "d", "e" ) { for my $n2 ( "l", "c", "r" ) {
+    my $n = $n1 . $n2;
+    $format_a{$n} = $wb->add_format(
+      border => 0, align => "top",
+      font => "Arial", size => 8,
+    );
+
+    # horizontal alignment
+    $format_a{$n}->set_align(
+      $n2 eq "l" ? "left" : $n2 eq "r" ? "right" : "center"
+    );
+
+    # header font
+    $format_a{$n}->set_bold( 1 ) if $n1 eq "h";
+
+    # error color
+    $format_a{$n}->set_color( "red" ) if $n1 eq "e";
+  } }
+
+  return \%format_a;
+}
+
+# }}}
+# {{{ sub o_ws_write( $sheet, $ws, \%format_a )
+
+sub o_ws_write { my( $sheet, $ws, $format_a ) = @_;
+  my $col_sa = $o_sheet_col_sa{$sheet};
+  my $select = $o_sheet_select{$sheet};
+
+  # {{{ $ws: worksheet settings
+
+  if( defined $ws ) {
+    $ws->outline_settings( 1, 0, 0 );  # visible, symbols_below, symbols_right
+    $ws->set_default_row( 12 );        # height
+    $ws->freeze_panes( 1, 0 );         # row, col; freeze the first row
+  }
+
+  # }}}
+  # {{{ $ws: column settings and header
+
+  my $col_i = 0;
+  for my $col_j ( 0..$#{ $col_sa } ) {
+    my $col_s = $col_sa->[$col_j];
+    my( $class, $lr, $col, $type, $fmt, $width ) = @$col_s;
+    next unless $o_class_f[$class];
+    my $lc = $class == 3 ? 0 : 1;
+    if( $class == 0 ) { $col = "#"; } else { $col =~ s/^-> //; }
+    $width = 10 if $width == 0;
+
+    if( defined $ws ) {
+      $ws->set_column(
+        $col_i, $col_i,     # first column, last column (zero based)
+        $width,             # column width (number of characters in the default font)
+        $format_a->{$fmt},  # column format (header format is overwritten below)
+        ( $lc > 0 ),        # hidden
+        $lc,                # outline level
+        1                   # collapsed
+      );
+
+      $ws->write(
+        0, $col_i,          # row, column (both zero based)
+        $col,               # token (automatic type)
+        $format_a->{hc}     # header format (over-write column format)
+      );
+    }
+
+    $col_i++;
+  }
+
+  # collapse next column
+  if( defined $ws ) {
+    $ws->set_column( $col_i, $col_i, undef, undef, undef, undef, 1 );
+  }
+
+  if( $info_level >= 2 ) {
+    log_info( "creating $col_i columns\n" );
+  }
+
+  # }}}
+  # {{{ $select: get columns from $col_sa and execute code
+
+  if( ref $select eq "CODE" ) {
+    my @col_a = ();
+    for ( @$col_sa ) { my $col = $_->[2];
+      push( @col_a, $col ) if $col =~ /^\w/;
+    }
+    $select = $select->( \@col_a );
+  }
+
+  return if $select eq "";
+  #log_debugf( ": select query: $select\n\n";
+
+  # }}}
+  # {{{ $m_db, $ws: execute $select and write rows into $ws
+
+  # cache of maps from id to key
+  my @id_key_a = map { undef } @$col_sa;
+
+  my $sth = m_prepare( $select );
+  $sth->execute();
+  my $row_i = 1; while( my @row = $sth->fetchrow_array() ) {
+    $col_i = 0;      # column number in worksheet
+    my $col_k = 0;   # column number in @row
+    my $lr_max = 0;  # max of $lr worksheet in columns
+    for my $col_j ( 0..$#{ $col_sa } ) {
+      my $col_s = $col_sa->[$col_j];
+      my( $class, $lr, $col ) = @$col_s;
+      # {{{ $value
+
+      my $value;
+
+      if( $col =~ /^\w/ ) {
+        $value = $row[$col_k];
+        $col_k++;
+      }
+
+      elsif( $col =~ /^-> (.*)/ && defined $row[$col_k - 1] ) {
+        my( $map, $id ) = ( $1, $row[$col_k - 1] );
+        # {{{ $map eq "DATE"
+
+        if( $map eq "DATE" && $id =~ /^([-0-9]+)T00:00:00$/ ) {
+          $value = $1;
+        }
+
+        # }}}
+        # {{{ exists $m_map_sh{$map}
+
+        elsif( exists $m_map_sh{$map} ) {
+          # decode BILLSDEPOSITS_V1.REPEATS
+          # see: MMEX 1.8.0 src/./billsdepositsdialog.cpp
+          if( $map eq "REPEATS_AUTO" ) {
+            use integer; $id = $id / 100;
+          } elsif( $map eq "REPEATS_FREQ" ) {
+            use integer; $id = $id % 100;
+          }
+
+          # cache of map from id to key
+          my $id_key;
+          if( defined $id_key_a[$col_j] ) {
+            $id_key = $id_key_a[$col_j];
+          } else {
+            $id_key = m_map_id_key( $map );
+            $id_key_a[$col_j] = $id_key;
+          }
+
+          # convert id to key
+          $value = m_map_cache_id_key( $id_key, $id );
+
+          # if the map is a database table, convert no id (-1) to no key (empty)
+          if( ! defined $value ) {
+          if( exists $m_map_table{$map} && $id == -1 ) {
+            $value = "";
+          } }
+        }
+
+        # }}}
+      }
+
+      # }}}
+      # {{{ $lr_max
+
+      $lr_max = $lr if $lr_max < $lr && defined $value;
+
+      # }}}
+      # {{{ $col_i
+
+      next unless $o_class_f[$class];
+
+      if( defined $ws ) {
+        $ws->write( $row_i, $col_i, $value ) if defined $value;
+      }
+
+      $col_i++;
+
+      # }}}
+    }
+    if( defined $ws ) {
+      $ws->set_row( $row_i, undef, undef, ( $lr_max > 0 ), $lr_max, 1 );
+    }
+    $row_i++;
+  }
+
+  # collapse next row
+  if( defined $ws ) {
+    $ws->set_row( $row_i, undef, undef, undef, undef, 1 );
+  }
+
+  if( $info_level >= 2 ) {
+    log_info( "creating ". ( $row_i - 1 ) ." rows\n" );
+  }
+
+  # }}}
+}
+
+# }}}
+# }}}
+# {{{ input (-i)
+# {{{ note
+
+# the input (-i) command imports data from an XLSX file into the MMEX database, by
+# (1) adding new records, (2) updating existing records, and (3) adding required records.
+# (2) and (3) can be performed only on tables with identifiable records, i.e., on tables
+# with a key, other than the rowid. database ids are abstracted; even if they are present
+# in the XLSX file (e.g., generated by -o -ci), they are ignored by the input command.
+# for tables without a key, all entries in XLSX file are added as new records, therefore
+# an export (-o) to an XLSX file followed by an import (-i) into the same MMEX file,
+# generates duplicate records in these tables. in order to avoid duplicates, it is
+# desirable that the database records can be identified without their rowid.
+
+# many MMEX tables have a unique key. for a few other tables, a key is assumed, although
+# it is not declared as unique in the database. the keys of each table can be listed
+# using the -i -htk flags (lines with ":-" or ":=" show unique or non-unique keys, resp.).
+# for all practical purposes, the user can easily adapt the data if needed, such that
+# all non-unique keys are in fact unique, i.e., different records have different keys.
+# if records with the same non-unique key are found, an error is printed and the import
+# is aborted. the assumed keys can be disabled with the -ku flag, in which case all XLSX
+# entries are added as new (possibly duplicate) records in tables without a key.
+
+# two important tables do not have a key (either unique or non-unique):
+#   CHECKINGACCOUNT_V1 (transactions)
+#   BILLSDEPOSITS_V1 (scheduled transactions)
+# therefore, an export to an XLSX file followed by an import into the same MMEX file,
+# would duplicate all transactions and all scheduled transactions, unless their import
+# is disabled, or they are removed in either the MMEX or the XLSX file before import.
+
+# it would be nice if in a future version of MMEX, all database tables have a key other
+# than the rowid. an obvious key for CHECKINGACCOUNT_V1 would be TRANSDATE, containing
+# the transaction date and time; however, in the current MMEX implementation the time
+# is reset to zero, which makes TRANSDATE (and also its combination with other fields)
+# inappropriate as a unique key. the choice of a unique key for BILLSDEPOSITS_V1 is less
+# obvious; TRANSDATE is a rolling date and it is automatically updated, while the
+# introduction of a serial number defeats the purpose of not using rowid as a key.
+
+# since an input XLSX worksheet may contain entries for more than one MMEX tables,
+# a discrimination algorithm is needed in order to decide the table of each entry.
+# for this purpose, the fields of each MMEX table are classified into 5 classes:
+#   rowid, key, discriminator, defined, default
+# each table has a single "rowid" field. it must have at least one "key" field, or at
+# least one "discriminator" field. all "key" and "discriminator" fields must be non-empty.
+# the "defined" fields must be present in the XLSX worksheet, but may be empty.
+# the "default" fields have a default value and may not exist in the XLSX worksheet.
+# a row in the input XLSX worksheet is compared in turn with each MMEX table associated
+# with the worksheet, in a specified order, and it is matched to the first table for
+# which all "key" and "discriminator" fields are non-empty. if a "defined" field in
+# the matching table is missing, an error is printed and the import is aborted, while
+# missing "default" fields are assigned their default value. the specification of each
+# worksheet can be found in %i_sheet_sh below (see also the -i -hs* flag).
+
+# in the simplest case, the value of a database field is taken from a corresponding
+# column in the XLSX worksheet (often with the same or similar name). however, for
+# several database fields, the value is computed dynamically by a specified operator,
+# which e.g., may check or transform the data coming from zero or more columns in
+# the XLSX worksheet. links between records in different tables are also created
+# dynamically by operators, using the rowid of known or previously inserted records.
+# the supported operators are implemented in i_row_proc().
+
+# }}}
+# {{{ const
+
+# {{{ input worksheet specs
+
+# %i_sheet_sh : ( $sheet => [ \@table_s, ... ] )
+
+# @table_s : ( 0: $table, 1: $unique, 2: [ \@field_s, ... ] )
+# @field_s : ( 0: $class, 1: $field, 2: $col_l, 3: $type, 4? $op, 5? $param )
+
+# $sheet   : (string) single-letter code of XLSX worksheet
+# $table   : (string) table name in MMEX database
+# $unique  : (boolean) table has unique vector of keys
+# $class   : 0: rowid, 1: key, 2: discriminator, 3: defined, 4: default
+# $field   : (string) field name in MMEX table
+# $col_l   : (string) comma separated list of column names in XLSX worksheet
+# $type    : (string) type in MMEX database
+# $op      : (string) operation (default value, check)
+# $param   : (any) additional parameters used by $op
+
+# }}}
+my %i_sheet_sh = (
+  # {{{ i => INFOTABLE_V1
+
+  i => [
+    [ "INFOTABLE_V1", 1, [
+      [ 0, "INFOID" ],
+      [ 1, "INFONAME",  "NAME",  "text", undef ], # UNIQUE
+      [ 3, "INFOVALUE", "VALUE", "text", undef ],
+    ] ],
+  ],
+
+  # }}}
+  # {{{ u => CURRENCYFORMATS_V1, CURRENCYHISTORY_V1
+
+  u => [
+    # {{{ CURRENCYFORMATS_V1
+
+    # key: CURRENCY_SYMBOL
+    [ "CURRENCYFORMATS_V1", 1, [
+      [ 0, "CURRENCYID" ],
+      [ 3, "CURRENCY_TYPE",   "TYPE",    "text",    "choice", "Fiat, Crypto" ],
+      [ 1, "CURRENCY_SYMBOL", "SYMBOL",  "text",    undef ], # UNIQUE
+      [ 2, "CURRENCYNAME",    "NAME",    "text",    undef ], # UNIQUE
+      [ 4, "PFX_SYMBOL",      "PFX",     "text",    "def", "" ],
+      [ 4, "SFX_SYMBOL",      "SFX",     "text",    "def", "" ],
+      [ 4, "DECIMAL_POINT",   "DEC_PNT", "text",    "def", "" ],
+      [ 4, "GROUP_SEPARATOR", "GRP_SEP", "text",    "def", "" ],
+      [ 4, "UNIT_NAME",       "UNIT",    "text",    "def", "" ],
+      [ 4, "CENT_NAME",       "CENT",    "text",    "def", "" ],
+      [ 3, "SCALE",           "SCALE",   "integer", undef ],
+      [ 4, "BASECONVRATE",    "RATE",    "numeric", "def onempty", 1 ],
+    ] ],
+
+    # }}}
+    # {{{ CURRENCYHISTORY_V1
+
+    [ "CURRENCYHISTORY_V1", 1, [
+      [ 0, "CURRHISTID" ],
+      [ 1, "CURRENCYID",  undef,       "id",      "def last_id", 0 ], # UNIQUE(1)
+      [ 1, "CURRDATE",    "HIST_DATE", "text",    undef ],            # UNIQUE(2)
+      [ 3, "CURRUPDTYPE", "UPDATE",    "id",      "key_id" ],
+      [ 3, "CURRVALUE",   "RATE",      "numeric", undef ],
+    ] ],
+
+    # }}}
+  ],
+
+  # }}}
+  # {{{ a => ACCOUNTLIST_V1, ATTACHMENT_V1
+
+  a => [
+    # {{{ ACCOUNTLIST_V1
+
+    [ "ACCOUNTLIST_V1", 1, [
+      [ 0, "ACCOUNTID" ],
+      [ 2, "ACCOUNTTYPE",     "TYPE",          "text",    "choice",
+        "Cash, Checking, Credit Card, Loan, Term, Investment, Asset, Shares"
+      ],
+      [ 1, "ACCOUNTNAME",     "NAME",          "text",    undef ], # UNIQUE
+      [ 4, "NOTES",           "NOTES",         "text",    "def", "" ],
+      [ 4, "STATUS",          "STATUS",        "text",    "def choice", "Open, Closed" ],
+      [ 4, "FAVORITEACCT",    "FAVORITE",      "text",    "def choice", "FALSE, TRUE" ],
+      [ 3, "INITIALDATE",     "DATE",          "text",    undef ],
+      [ 4, "INITIALBAL",      "BALANCE",       "numeric", "def", 0 ],
+      [ 3, "CURRENCYID",      "CURRENCY",      "id",      "key_id" ],
+      [ 4, "ACCOUNTNUM",      "NUM",           "text",    "def", "" ],
+      [ 4, "HELDAT",          "HELD_AT",       "text",    "def", "" ],
+      [ 4, "WEBSITE",         "WEBSITE",       "text",    "def", "" ],
+      [ 4, "CONTACTINFO",     "CONTACT_INFO",  "text",    "def", "" ],
+      [ 4, "ACCESSINFO",      "ACCESS_INFO",   "text",    "def", "" ],
+      [ 4, "STATEMENTLOCKED", "STMT_LOCKED",   "integer", "def", 0 ],
+      [ 4, "STATEMENTDATE",
+        "STMT_DATE, DATE",
+        "text", "def first"
+      ],
+      [ 4, "MINIMUMBALANCE",  "BALANCE_MIN",   "numeric", "def", 0 ],
+      [ 4, "CREDITLIMIT",     "CREDIT_LIMIT",  "numeric", "def", 0 ],
+      [ 4, "INTERESTRATE",    "INTEREST_RATE", "numeric", "def", 0 ],
+      [ 4, "PAYMENTDUEDATE",
+        "PAYMENT_DATE, DATE",
+        "text", "def first"
+      ],
+      [ 4, "MINIMUMPAYMENT",  "PAYMENT_MIN",   "numeric", "def", 0 ],
+    ] ],
+
+    # }}}
+    # {{{ ATTACHMENT_V1
+
+    [ "ATTACHMENT_V1", 0, [
+      [ 0, "ATTACHMENTID" ],
+      [ 1, "REFTYPE",     undef,         "text", "def", "BankAccount" ],
+      [ 1, "REFID",       undef,         "id",   "def last_id", 0 ],
+      [ 3, "DESCRIPTION", "ATTACH_DESC", "text", undef ],
+      [ 1, "FILENAME",    "ATTACH_FILE", "text", undef ],
+    ] ],
+
+    # }}}
+  ],
+
+  # }}}
+  # {{{ e => ASSETS_V1, ATTACHMENT_V1
+
+  e => [
+    # {{{ ASSETS_V1
+
+    [ "ASSETS_V1", 0, [
+      [ 0, "ASSETID" ],
+      [ 2, "ASSETTYPE",       "TYPE",        "text",    "choice",
+        "Property, Automobile, Household Object, Art, Jewellery, Cash, Other"
+      ],
+      [ 1, "ASSETNAME",       "NAME",        "text",    undef ],
+      [ 4, "NOTES",           "NOTES",       "text",    "def", "" ],
+      [ 4, "ASSETSTATUS",     "STATUS",      "text",    "def choice", "Open, Closed" ],
+      [ 1, "STARTDATE",       "DATE",        "text",    undef ],
+      [ 3, "VALUE",           "VALUE",       "numeric", undef ],
+      [ 3, "CURRENCYID",      "CURRENCY",    "id",      "key_id_empty" ],
+      [ 4, "VALUECHANGE",     "CHANGE",      "text",    "def choice",
+        "None, Appreciates, Depreciates"
+      ],
+      [ 4, "VALUECHANGEMODE", "CHANGE_MODE", "text",    "def choice",
+        "Percentage, Linear"
+      ],
+      [ 4, "VALUECHANGERATE", "CHANGE_RATE", "numeric", "def", 0 ],
+    ] ],
+
+    # }}}
+    # {{{ ATTACHMENT_V1
+
+    [ "ATTACHMENT_V1", 0, [
+      [ 0, "ATTACHMENTID" ],
+      [ 1, "REFTYPE",     undef,         "text", "def", "Asset" ],
+      [ 1, "REFID",       undef,         "id",   "def last_id", 0 ],
+      [ 3, "DESCRIPTION", "ATTACH_DESC", "text", undef ],
+      [ 1, "FILENAME",    "ATTACH_FILE", "text", undef ],
+    ] ],
+
+    # }}}
+  ],
+
+  # }}}
+  # {{{ s => STOCK_V1, ATTACHMENT_V1
+
+  s => [
+    # {{{ STOCK_V1
+
+    [ "STOCK_V1", 0, [
+      [ 0, "STOCKID" ],
+      [ 2, "HELDAT",        "ACCOUNT",    "id",      "key_id" ],
+      [ 2, "SYMBOL",        "SYMBOL",     "text",    undef ],
+      [ 1, "STOCKNAME",     "NAME",       "text",    undef ],
+      [ 4, "NOTES",         "NOTES",      "text",    "def", "" ],
+      [ 1, "PURCHASEDATE",  "DATE",       "text",    undef ],
+      [ 3, "NUMSHARES",     "NUM_SHARES", "numeric", undef ],
+      [ 3, "PURCHASEPRICE", "PRICE",      "numeric", undef ],
+      [ 3, "VALUE",         "VALUE",      "numeric", undef ],
+      [ 3, "COMMISSION",    "COMMISSION", "numeric", undef ],
+      [ 3, "CURRENTPRICE",  "CUR_PRICE",  "numeric", undef ],
+    ] ],
+
+    # }}}
+    # {{{ ATTACHMENT_V1
+
+    [ "ATTACHMENT_V1", 0, [
+      [ 0, "ATTACHMENTID" ],
+      [ 1, "REFTYPE",     undef,         "text", "def", "Stock" ],
+      [ 1, "REFID",       undef,         "id",   "def last_id", 0 ],
+      [ 3, "DESCRIPTION", "ATTACH_DESC", "text", undef ],
+      [ 1, "FILENAME",    "ATTACH_FILE", "text", undef ],
+    ] ],
+
+    # }}}
+  ],
+
+  # }}}
+  # {{{ h => STOCKHISTORY_V1
+
+  h => [
+    # {{{ STOCKHISTORY_V1
+
+    [ "STOCKHISTORY_V1", 1, [
+      [ 0, "HISTID" ],
+      [ 1, "SYMBOL",  "SYMBOL", "text",    undef ], # UNIQUE(1)
+      [ 1, "DATE",    "DATE",   "text",    undef ], # UNIQUE(2)
+      [ 3, "UPDTYPE", "UPDATE", "id",      "key_id" ],
+      [ 3, "VALUE",   "PRICE",  "numeric", undef ],
+    ] ],
+
+    # }}}
+  ],
+
+  # }}}
+  # {{{ c => CATEGORY_V1
+
+  c => [
+    [ "CATEGORY_V1", 1, [
+      [ 0, "CATEGID" ],
+      [ 1, "PARENTID",  "PATH",   "id",      "path_pid" ],  # UNIQUE(2)
+      [ 1, "CATEGNAME", "PATH",   "text",    "path_name" ], # UNIQUE(1)
+      [ 4, "ACTIVE",    "ACTIVE", "integer", "def", 1 ],
+    ] ],
+  ],
+
+  # }}}
+  # {{{ p => PAYEE_V1, ATTACHMENT_V1
+
+  p => [
+    # {{{ PAYEE_V1
+
+    [ "PAYEE_V1", 1, [
+      [ 0, "PAYEEID" ],
+      [ 1, "PAYEENAME", "NAME",     "text",    undef ], # UNIQUE
+      [ 4, "NOTES",     "NOTES",    "text",    "def", "" ],
+      [ 4, "ACTIVE",    "ACTIVE",   "integer", "def", 1 ],
+      [ 4, "NUMBER",    "NUMBER",   "text",    "def", "" ],
+      [ 3, "CATEGID",   "CATEGORY", "id",      "req key_id_empty" ],
+      [ 4, "WEBSITE",   "WEBSITE",  "text",    "def", "" ],
+      [ 4, "PATTERN",   "PATTERN",  "text",    "def", "" ],
+    ] ],
+
+    # }}}
+    # {{{ ATTACHMENT_V1
+
+    [ "ATTACHMENT_V1", 0, [
+      [ 0, "ATTACHMENTID" ],
+      [ 1, "REFTYPE",     undef,         "text", "def", "Payee" ],
+      [ 1, "REFID",       undef,         "id",   "def last_id", 0 ],
+      [ 3, "DESCRIPTION", "ATTACH_DESC", "text", undef ],
+      [ 1, "FILENAME",    "ATTACH_FILE", "text", undef ],
+    ] ],
+
+    # }}}
+  ],
+
+  # }}}
+  # {{{ g => TAG_V1
+
+  g => [
+    [ "TAG_V1", 1, [
+      [ 0, "TAGID" ],
+      [ 1, "TAGNAME", "NAME",   "text",    undef ], # UNIQUE
+      [ 4, "ACTIVE",  "ACTIVE", "integer", "def", 1 ],
+    ] ],
+  ],
+
+  # }}}
+  # {{{ f => CUSTOMFIELD_V1
+
+  f => [
+    [ "CUSTOMFIELD_V1", 0, [
+      [ 0, "FIELDID" ],
+      [ 2, "REFTYPE",     "REF_TYPE",   "text", "choice",
+        "Transaction, Stock, Asset, BankAccount, RecurringTransaction, Payee, " .
+        "TransactionSplit, RecurringTransactionSplit"
+      ],
+      [ 1, "DESCRIPTION", "NAME",       "text", undef ],
+      [ 3, "TYPE",        "TYPE",       "text", "choice",
+        "String, Integer, Decimal, Boolean, Date, Time, SingleChoice, MultiChoice"
+      ],
+      [ 4, "PROPERTIES",  "PROPERTIES", "text", "def", "{}" ],
+    ] ],
+  ],
+
+  # }}}
+  # {{{ t => CHECKINGACCOUNT_V1, SPLITTRANSACTIONS_V1, TRANSLINK_V1, SHAREINFO_V1, TAGLINK_V1, CUSTOMFIELDDATA_V1, ATTACHMENT_V1
+
+  t => [
+    # {{{ CHECKINGACCOUNT_V1
+    [ "CHECKINGACCOUNT_V1", 0, [
+      [ 0, "TRANSID" ],
+      [ 2, "TRANSDATE",         "DATE",         "text",    "date0" ],
+      [ 4, "TRANSACTIONNUMBER", "NUMBER",       "text",    "def", "" ],
+      [ 3, "STATUS",            "STATUS",       "text",    "choice", ", R, V, F, D" ],
+      [ 2, "TRANSCODE",         "CODE",         "text",    "choice",
+        "Withdrawal, Deposit, Transfer"
+      ],
+      [ 3, "ACCOUNTID",         "ACCOUNT",      "id",      "key_id" ],
+      [ 3, "TOACCOUNTID",       "TO_ACCOUNT",   "id",      "key_id_empty" ],
+      [ 3, "PAYEEID",           "PAYEE",        "id",      "req key_id_empty" ],
+      [ 3, "CATEGID",           "CATEGORY",     "id",      "req key_id_empty" ],
+      [ 4, "NOTES",             "NOTES",        "text",    "def", "" ],
+      [ 3, "TRANSAMOUNT",       "AMOUNT",       "numeric", undef ],
+      [ 4, "TOTRANSAMOUNT",
+        "TO_AMOUNT, AMOUNT",
+        "numeric", "def first"
+      ],
+      [ 4, "LASTUPDATEDTIME",   "UPDATED_TIME", "text",    "def gmtime" ],
+      [ 4, "DELETEDTIME",       "DELETED_TIME", "text",    "def", "" ],
+      [ 4, "FOLLOWUPID",        "FOLLOWUP_ID",  "integer", "def onempty", -1 ],
+      [ 4, "COLOR",             "COLOR",        "integer", "def onempty", -1 ],
+    ] ],
+
+    # }}}
+    # {{{ SPLITTRANSACTIONS_V1
+
+    [ "SPLITTRANSACTIONS_V1", 0, [
+      [ 0, "SPLITTRANSID" ],
+      [ 2, "TRANSID",          undef,      "id",      "def last_id", 0 ],
+      [ 2, "CATEGID",          "CATEGORY", "id",      "req key_id" ],
+      [ 4, "NOTES",            "NOTES",    "text",    "def", "" ],
+      [ 3, "SPLITTRANSAMOUNT", "AMOUNT",   "numeric", undef ],
+    ] ],
+
+    # }}}
+    # {{{ TRANSLINK_V1 (LINKTYPE=Asset)
+
+    [ "TRANSLINK_V1", 0, [
+      [ 0, "TRANSLINKID" ],
+      [ 2, "CHECKINGACCOUNTID", undef, "id",   "def last_id", 0 ],
+      [ 2, "LINKTYPE",          undef, "text", "def", "Asset" ],
+      [ 2, "LINKRECORDID",
+        "ASSET_NAME, ASSET_DATE",
+        "id", "nkey_id", "ASSET"
+      ],
+    ] ],
+
+    # }}}
+    # {{{ TRANSLINK_V1 (LINKTYPE=Stock)
+
+    [ "TRANSLINK_V1", 0, [
+      [ 0, "TRANSLINKID" ],
+      [ 2, "CHECKINGACCOUNTID", undef, "id",   "def last_id", 0 ],
+      [ 2, "LINKTYPE",          undef, "text", "def", "Stock" ],
+      [ 2, "LINKRECORDID",
+          "STOCK_NAME, STOCK_DATE",
+          "id", "nkey_id", "STOCK"
+      ],
+    ] ],
+
+    # }}}
+    # {{{ SHAREINFO_V1
+
+    [ "SHAREINFO_V1", 0, [
+      [ 0, "SHAREINFOID" ],
+      [ 2, "CHECKINGACCOUNTID", undef,              "id",      "def last_id", 0 ],
+      [ 2, "SHARENUMBER",       "SHARE_NUMBER",     "numeric", undef ],
+      [ 2, "SHAREPRICE",        "SHARE_PRICE",      "numeric", undef ],
+      [ 3, "SHARECOMMISSION",   "SHARE_COMMISSION", "numeric", undef ],
+      [ 4, "SHARELOT",          "SHARE_LOT",        "text",    "def", "" ],
+    ] ],
+
+    # }}}
+    # {{{ TAGLINK_V1 (REFTYPE=TransactionSplit)
+
+    # note: last_id 1  is checked before last_id 0
+    [ "TAGLINK_V1", 1, [
+      [ 0, "TAGLINKID" ],
+      [ 1, "REFTYPE", undef, "text", "def", "TransactionSplit" ], # UNIQUE(1)
+      [ 1, "REFID",   undef, "id",   "def last_id", 1 ],          # UNIQUE(2)
+      [ 1, "TAGID",   "TAG", "id",   "req key_id" ],              # UNIQUE(3)
+    ] ],
+
+    # }}}
+    # {{{ TAGLINK_V1 (REFTYPE=Transaction)
+
+    [ "TAGLINK_V1", 1, [
+      [ 0, "TAGLINKID" ],
+      [ 1, "REFTYPE", undef, "text", "def", "Transaction" ], # UNIQUE(1)
+      [ 1, "REFID",   undef, "id",   "def last_id", 0 ],     # UNIQUE(2)
+      [ 1, "TAGID",   "TAG", "id",   "req key_id" ],         # UNIQUE(3)
+    ] ],
+
+    # }}}
+    # {{{ CUSTOMFIELDDATA_V1
+
+    [ "CUSTOMFIELDDATA_V1", 1, [
+      [ 0, "FIELDATADID" ],
+      [ 1, "REFID",   undef,     "id",   "def last_id", 0 ],  # UNIQUE(2)
+      [ 1, "FIELDID", "FIELD",   "id",   "nkey_id" ],         # UNIQUE(1)
+      [ 3, "CONTENT", "CONTENT", "text", undef ],
+    ] ],
+
+    # }}}
+    # {{{ ATTACHMENT_V1
+
+    [ "ATTACHMENT_V1", 0, [
+      [ 0, "ATTACHMENTID" ],
+      [ 1, "REFTYPE",     undef,         "text", "def", "Transaction" ],
+      [ 1, "REFID",       undef,         "id",   "def last_id", 0 ],
+      [ 3, "DESCRIPTION", "ATTACH_DESC", "text", undef ],
+      [ 1, "FILENAME",    "ATTACH_FILE", "text", undef ],
+    ] ],
+
+    # }}}
+  ],
+
+  # }}}
+  # {{{ r => BILLSDEPOSITS_V1, BUDGETSPLITTRANSACTIONS_V1, TAGLINK_V1, CUSTOMFIELDDATA_V1, ATTACHMENT_V1
+
+  r => [
+    # {{{ BILLSDEPOSITS_V1
+
+    [ "BILLSDEPOSITS_V1", 0, [
+      [ 0, "BDID" ],
+      [ 2, "TRANSDATE",          "DATE",        "text",    "date0" ],
+      [ 4, "NEXTOCCURRENCEDATE",
+        "NEXT_DATE, DATE",
+        "text", "def first"
+      ],
+      [ 4, "TRANSACTIONNUMBER",  "NUMBER",      "text",    "def", "" ],
+      [ 3, "STATUS",             "STATUS",      "text",    "choice", ", R, V, F, D" ],
+      [ 2, "TRANSCODE",          "CODE",        "text",    "choice",
+        "Withdrawal, Deposit, Transfer"
+      ],
+      [ 3, "ACCOUNTID",          "ACCOUNT",     "id",      "key_id" ],
+      [ 3, "TOACCOUNTID",        "TO_ACCOUNT",  "id",      "key_id_empty" ],
+      [ 3, "PAYEEID",            "PAYEE",       "id",      "req key_id_empty" ],
+      [ 3, "CATEGID",            "CATEGORY",    "id",      "req key_id_empty" ],
+      [ 4, "NOTES",              "NOTES",       "text",    "def", "" ],
+      [ 3, "TRANSAMOUNT",        "AMOUNT",      "numeric", undef ],
+      [ 3, "TOTRANSAMOUNT",      "TO_AMOUNT",   "numeric", undef ],
+      [ 3, "REPEATS",
+        "REPEATS_AUTO, REPEATS_FREQ",
+        "integer", "repeats"
+      ],
+      [ 3, "NUMOCCURRENCES",     "REPEATS_NUM", "integer", "onempty", -1 ],
+      [ 4, "FOLLOWUPID",         "FOLLOWUP_ID", "integer", "def onempty", -1 ],
+      [ 4, "COLOR",              "COLOR",       "integer", "def onempty", -1 ],
+
+    ] ],
+
+    # }}}
+    # {{{ BUDGETSPLITTRANSACTIONS_V1
+
+    [ "BUDGETSPLITTRANSACTIONS_V1", 0, [
+      [ 0, "SPLITTRANSID" ],
+      [ 2, "TRANSID",          undef,      "id",      "def last_id", 0 ],
+      [ 2, "CATEGID",          "CATEGORY", "id",      "req key_id" ],
+      [ 4, "NOTES",            "NOTES",    "text",    "def", "" ],
+      [ 3, "SPLITTRANSAMOUNT", "AMOUNT",   "numeric", undef ],
+    ] ],
+
+    # }}}
+    # {{{ TAGLINK_V1 (REFTYPE=RecurringTransactionSplit)
+
+    # note: last_id 1  is checked before last_id 0
+    [ "TAGLINK_V1", 1, [
+      [ 0, "TAGLINKID" ],
+      [ 1, "REFTYPE", undef, "text", "def", "RecurringTransactionSplit" ], # UNIQUE(1)
+      [ 1, "REFID",   undef, "id",   "def last_id", 1 ],                   # UNIQUE(2)
+      [ 1, "TAGID",   "TAG", "id",   "req key_id" ],                       # UNIQUE(3)
+    ] ],
+
+    # }}}
+    # {{{ TAGLINK_V1 (REFTYPE=RecurringTransaction)
+
+    [ "TAGLINK_V1", 1, [
+      [ 0, "TAGLINKID" ],
+      [ 1, "REFTYPE", undef, "text", "def", "RecurringTransaction" ], # UNIQUE(1)
+      [ 1, "REFID",   undef, "id",   "def last_id", 0 ],              # UNIQUE(2)
+      [ 1, "TAGID",   "TAG", "id",   "req key_id" ],                  # UNIQUE(3)
+    ] ],
+
+    # }}}
+    # {{{ CUSTOMFIELDDATA_V1
+
+    [ "CUSTOMFIELDDATA_V1", 1, [
+      [ 0, "FIELDATADID" ],
+      [ 1, "REFID",   undef,     "idn",  "def last_idn", 0 ],  # UNIQUE(2)
+      [ 1, "FIELDID", "FIELD",   "id",   "nkey_id" ],          # UNIQUE(1)
+      [ 3, "CONTENT", "CONTENT", "text", undef ],
+    ] ],
+
+    # }}}
+    # {{{ ATTACHMENT_V1
+
+    [ "ATTACHMENT_V1", 0, [
+      [ 0, "ATTACHMENTID" ],
+      [ 1, "REFTYPE",     undef,         "text", "def", "RecurringTransaction" ],
+      [ 1, "REFID",       undef,         "id",   "def last_id", 0 ],
+      [ 3, "DESCRIPTION", "ATTACH_DESC", "text", undef ],
+      [ 1, "FILENAME",    "ATTACH_FILE", "text", undef ],
+    ] ],
+
+    # }}}
+  ],
+
+  # }}}
+  # {{{ y => BUDGETYEAR_V1
+
+  y => [
+    [ "BUDGETYEAR_V1", 1, [
+      [ 0, "BUDGETYEARID" ],
+      [ 1, "BUDGETYEARNAME", "NAME", "text", undef ], # UNIQUE
+    ] ],
+  ],
+
+  # }}}
+  # {{{ b => BUDGETTABLE_V1
+
+  b => [
+    # key: (BUDGETYEARID, CATEGID)
+    [ "BUDGETTABLE_V1", 0, [
+      [ 0, "BUDGETENTRYID" ],
+      [ 1, "BUDGETYEARID", "YEAR",     "id",      "req key_id" ],
+      [ 1, "CATEGID",      "CATEGORY", "id",      "req key_id" ],
+      [ 4, "NOTES",        "NOTES",    "text",    "def", "" ],
+      [ 4, "ACTIVE",       "ACTIVE",   "integer", "def", 1 ],
+      [ 3, "PERIOD",       "PERIOD",   "text",    "choice",
+        ", None, Weekly, Fortnightly, Monthly, Every 2 Months, Quarterly, " .
+        "Half-Yearly, Yearly, Daily"
+
+      ],
+      [ 3, "AMOUNT",       "AMOUNT",   "numeric", undef ],
+    ] ],
+  ],
+
+  # }}}
+  # {{{ o => REPORT_V1
+
+  o => [
+    [ "REPORT_V1", 1, [
+      [ 0, "REPORTID" ],
+      [ 1, "REPORTNAME",      "NAME",        "text",    undef ], # UNIQUE
+      [ 3, "GROUPNAME",       "GROUP_NAME",  "text",    undef ],
+      [ 4, "ACTIVE",          "ACTIVE",      "integer", "def", 1 ],
+      [ 3, "SQLCONTENT",      "SQL",         "text",    undef ],
+      [ 3, "LUACONTENT",      "LUA",         "text",    undef ],
+      [ 3, "TEMPLATECONTENT", "TEMPLATE",    "text",    undef ],
+      [ 3, "DESCRIPTION",     "DESCRIPTION", "text",    undef ],
+    ] ],
+  ],
+
+  # }}}
+);
+# {{{ indexes
+
+my %i_sheet_table_a = ();  # ( $sheet => [ $table, ... ] )
+my %i_table_index   = ();  # ( $table => [ [ $sheet_i, $table_i, ... ], ... ] )
+my %i_table_sheet_a = ();  # ( $table => [ $sheet, ... ] )
+my %i_table_sh      = ();  # ( $table => [ $unique, $rowid, [ $key, ... ] )
+my @i_table_a       = ();  # ( $table, ... )
+
+# {{{ %i_sheet_table_a
+
+for my $sheet ( keys %i_sheet_sh ) {
+  $i_sheet_table_a{$sheet} = [];
+  my %table_f = ();
+  my $table_sa = $i_sheet_sh{$sheet};
+  # add tables once, in the order that they appear in $table_sa
+  for my $table_s ( @$table_sa ) {
+    my $table = $table_s->[0];
+    next if exists $table_f{$table};
+    push( @{ $i_sheet_table_a{$sheet} }, $table );
+    $table_f{$table} = 1;
+  }
+}
+
+# }}}
+# {{{ %i_table_index
+
+for my $sheet_i ( 0..$#o_sheet_a ) {
+  my $sheet = $o_sheet_a[$sheet_i];
+  my $table_sa = $i_sheet_sh{$sheet};
+  for my $table_i ( 0..$#{ $table_sa } ) {
+    my $table_s = $table_sa->[$table_i];
+    my $table = $table_s->[0];
+    $i_table_index{$table} = [] unless exists $i_table_index{$table};
+    my $index = $i_table_index{$table};  # [ [ $sheet_i, $table_i, ... ], ... ]
+    # since sheets are added in order, the current sheet (with index $sheet_i)
+    # can only appear in the last entry of $index
+    if( @$index > 0 && $index->[-1]->[0] == $sheet_i ) {
+      push( @{ $index->[-1] }, $table_i );
+    } else {
+      push( @$index, [ $sheet_i, $table_i ] );
+    }
+  }
+}
+
+# }}}
+# {{{ %i_table_sheet_a
+
+for my $table ( keys %i_table_index ) {
+  my $sheet_sa = $i_table_index{$table};
+  $i_table_sheet_a{$table} = [ map { $o_sheet_a[ $_->[0] ] } @$sheet_sa ];
+}
+
+# }}}
+# {{{ %i_table_sh
+
+for my $table ( keys %i_table_index ) {
+  my( $unique, $rowid, $key_l );
+  my @key_a = ();
+
+  SHEET: for ( @{ $i_table_index{$table} } ) {
+    my( $sheet_i, @table_ia ) = @$_;
+    my $sheet = $o_sheet_a[$sheet_i];
+    my $table_sa = $i_sheet_sh{$sheet};
+    SHEET_TABLE: for my $table_i ( @table_ia ) {
+      my $table_s = $table_sa->[$table_i];
+      my( $table1, $unique1, $field_sa ) = @$table_s;
+      # {{{ check: $table1 eq $table
+
+      if( $table1 ne $table ) {
+        log_checkf( ": i_table_sh: $sheet.$table_i has table $table1 != $table\n" );
+        next SHEET_TABLE;
+      }
+
+      # }}}
+      # {{{ $unique: all $table_s of $table must have the same $unique
+
+      if( ! defined $unique ) {
+        $unique = $unique1;
+      } elsif( $unique1 != $unique ) {
+        log_checkf( ": i_table_sh: $sheet.$table_i has unique $unique1 != $unique\n" );
+      }
+
+      # }}}
+      # {{{ $rowid1, @key1_a, $key1_l
+
+      my $rowid1;
+      my @key1_a = ();
+
+      for my $field_s ( @$field_sa ) {
+        my( $class, $field ) = @$field_s;
+        if( $class == 0 && ! defined $rowid1 ) {
+          $rowid1 = $field;
+        } elsif( $class == 0 ) {
+          log_checkf( ": i_table_sh: $sheet.$table_i has more than one rowid\n" );
+        } elsif( $class == 1 ) {
+          push( @key1_a, $field );
+        }
+      }
+
+      my $key1_l = join( ", ", sort @key1_a );
+
+      # }}}
+      # {{{ $rowid: all $table_s of $table must have the same $rowid
+
+      if( ! defined $rowid ) {
+        $rowid = $rowid1;
+      } elsif( $rowid1 ne $rowid ) {
+        log_checkf( ": i_table_sh: $sheet.$table_i has rowid $rowid1 != $rowid\n" );
+      }
+
+      # }}}
+      # {{{ @key_a, $key_l: all $table_s of $table must have the same sorted @key_a
+
+      if( ! defined $key_l ) {
+        @key_a = @key1_a;
+        $key_l = $key1_l;
+      } elsif( $key1_l ne $key_l ) {
+        log_checkf( ": i_table_sh: $sheet.$table_i has keys [$key1_l] != [$key_l]\n" );
+      }
+
+      # }}}
+    }
+  }
+  # {{{ %i_table_sh: add $table => [ $unique, $rowid, \@key_a ]
+
+  if( defined $unique && defined $rowid && defined $key_l ) {
+    $i_table_sh{$table} = [ $unique, $rowid, \@key_a ];
+  } else {
+    log_checkf( ": i_table_sh: cannot create spec for $table\n" );
+  }
+
+  # }}}
+}
+
+# }}}
+# {{{ @i_table_a
+
+@i_table_a =
+  map { $_->[0] }
+  sort { $a->[-1]->[0] <=> $b->[-1]->[0] || $a->[-1]->[-1] <=> $b->[-1]->[-1] }
+  map { [ $_, @{ $i_table_index{$_} } ] } keys %i_table_index;
+
+# }}}
+
+# }}}
+
+# {{{ required worksheet specs
+
+# %i_req_sh : ( $sheet => \@table_s )
+
+# @table_s : ( 0: $map, 1: $table, 2: [ \@field_s, ... ] )
+# @field_s : ( 0: $class, 1: $field, 2: $type, 3: $value )
+
+# $sheet   : (string) single-letter code of XLSX worksheet
+# $map     : (string) map name
+# $table   : (string) table name in MMEX database
+# $class   : 0: rowid, 1: key, 4: default
+# $field   : (string) field name in MMEX table
+# $type    : (string) type in MMEX database
+# $value   : (string) value as in insert query
+
+# }}}
+my %i_req_sh = (
+  # {{{ c => CATEGORY
+
+  c => [ "CATEGORY", "CATEGORY_V1", [
+    [ 0, "CATEGID" ],
+    [ 1, "PARENTID",  "id",      "?" ], # UNIQUE(2)
+    [ 1, "CATEGNAME", "text",    "?" ], # UNIQUE(1)
+    [ 4, "ACTIVE",    "integer", "1" ],
+  ] ],
+
+  # }}}
+  # {{{ p => PAYEE
+
+  p => [ "PAYEE", "PAYEE_V1", [
+    [ 0, "PAYEEID" ],
+    [ 1, "PAYEENAME", "text",    "?"  ], # UNIQUE
+    [ 4, "NOTES",     "text",    "''" ],
+    [ 4, "ACTIVE",    "integer", "1"  ],
+    [ 4, "NUMBER",    "text",    "''" ],
+    [ 4, "CATEGID",   "id",      "-1" ],
+    [ 4, "WEBSITE",   "text",    "''" ],
+    [ 4, "PATTERN",   "text",    "''" ],
+  ] ],
+
+  # }}}
+  # {{{ g => TAG
+
+  g => [ "TAG", "TAG_V1", [
+    [ 0, "TAGID" ],
+    [ 1, "TAGNAME", "text",    "?" ], # UNIQUE
+    [ 4, "ACTIVE",  "integer", "1" ],
+  ] ],
+
+  # }}}
+  # {{{ y => YEAR
+
+  y => [ "YEAR", "BUDGETYEAR_V1", [
+    [ 0, "BUDGETYEARID" ],
+    [ 1, "BUDGETYEARNAME", "text", "?" ], # UNIQUE
+  ] ],
+
+  # }}}
+);
+# {{{ indexes
+
+# list of sheet codes in the order of @o_sheet_a
+my @i_req_a = grep { exists $i_req_sh{$_} } @o_sheet_a;
+
+# non-separated list of sheet codes
+my $i_req_l = join( "", @i_req_a );
+
+# }}}
+
+# }}}
+# {{{ var
+
+# flags
+my $i_key_unique;  # (boolean) restict keys to unique keys in database
+my $i_update_all;  # (boolean) force update of identical records
+my %i_sheet_u;     # ( $sheet => 1 )
+my %i_sheet_r;     # ( $sheet => 1 )
+
+# state
+my $i_attach_f;    # (boolean) ATTACHMENT_V1 table has been modified
+
+# {{{ cache of tables in current sheet
+
+# @i_table_cache_sa : ( \@table_s, ... )
+
+# @table_s   : ( 0: $table, 1: $last_id, 2: \@st_s, 3: \@field_aa, 4: \@field_saa ) or undef
+# @st_s      : ( 0: $sel_0_1, 1: $sel_023_1, 2? $upd_23_0, 3? $ins_1234 ) DBI statements
+# @field_aa  : ( $class -> [ $field,   ... ] ) fields in each class
+# @field_saa : ( $class -> [ $field_s, ... ] ) field specs in each class
+
+# $table     : (string) table name in MMEX database
+# $last_id   : (integer or undef) last rowid (primary id) in table
+# $sel_0_1   : (DBI) select <rowid> from $table where <keys>
+# $sel_023_1 : (DBI) select <rowid>, <discr>, <defined> from $table where <keys>
+# $upd_23_0  : (DBI) update $table set <discr>, <defined> where <rowid>
+# $ins_1234  : (DBI) insert into $table( <keys>, <discr>, <defined>, <default> ) values( ... )
+# $class     : 0: rowid, 1: key, 2: discriminator, 3: defined, 4: default
+# $field     : (string) field name in MMEX table
+# $field_s   : reference to $i_sheet_sh{$sheet}->[$table_i]->[2]->[$field_i]
+
+# @table_s is undef when this table cannot be matched by any worksheet row.
+# @st_s.{2,3} modify the database; they do not exist in dry run mode.
+# $sel_0_1, $sel_023_1, $upd_23_0 are undef if the table has no key.
+# $class has slightly different meaning here than in %i_sheet_sh. $class == 1 means
+# the field is a key in %i_sheet_sh and ( ! $i_key_unique or table keys are unique ).
+# if $i_key_unique == 1, non-unique keys in %i_sheet_sh are transferred to class 2.
+# $class == 4 means the field has default value and it does not exist in the worksheet.
+# if a field with default value exists in the worksheet, it is trasferred to class 3.
+# a worksheet row matches a table if all discriminator and key fields are non-empty
+# (notice that the set of discriminator and key fields is independent of $i_key_unique).
+
+# }}}
+my @i_table_cache_sa;
+
+# {{{ cache of required worksheets
+
+# %i_req_cache_sh : ( $map => \@req_s )
+
+# $map     : (string) map name
+# @req_s   : ( 0: $table, 1? $st_ins, 2? \@field_a )
+# $table   : (string) table name in MMEX database
+# $st_ins  : (DBI statement handle) insert into $table( <keys>, <default> ) values( ... )
+# @field_a : ( $field, ... ) key fields in table
+
+# all requires worksheets (c, p, g, y) are backed by maps between id and key in cache.
+# @st_ins modifies the database; it does not exist in dry run mode.
+
+# }}}
+my %i_req_cache_sh;
+
+# }}}
+
+# {{{ sub i_req_prepare()
+# prepare %i_req_cache_sh for each required worksheet in %i_sheet_r
+
+sub i_req_prepare {
+  %i_req_cache_sh = ();
+  for my $sheet ( keys %i_req_sh ) {
+    next unless exists $i_sheet_r{$sheet};
+    my $table_s = $i_req_sh{$sheet};
+    my( $map, $table, $field_sa ) = @$table_s;
+
+    my @req_s = ( $table );
+    if( ! $dry_run ) {
+      my @f1 = (); my @v1 = ();
+      my @f4 = (); my @v4 = ();
+      for my $field_s ( @$field_sa ) {
+        my( $class, $field, $type, $value ) = @$field_s;
+        if( $class == 1 ) { push( @f1, $field ); push( @v1, $value ); }
+        if( $class == 4 ) { push( @f4, $field ); push( @v4, $value ); }
+      }
+      my $query = "insert into $table( "
+        . join( ", ", ( @f1, @f4 ) )
+        . " )\nvalues( "
+        . join( ", ", ( @v1, @v4 ) )
+        . " )";
+      #log_debugf( ": query: $query\n" );
+      my $st_ins = m_prepare( $query );
+      push( @req_s, $st_ins, \@f1 );
+    }
+
+    $i_req_cache_sh{$map} = \@req_s;
+  }
+}
+
+# }}}
+# {{{ sub i_req_id( $map, $key ) -> $id
+# add required $key into database and into $map
+# return the rowid of the new record in database (or 0 in dry run mode)
+
+sub i_req_id { my( $map, $key ) = @_;
+  # {{{ $table, $st_ins, $field_a
+
+  if( ! exists $i_req_cache_sh{$map} ) {
+    log_errorl( "cannot add required $map=[$key] (use -r[al])\n" );
+    return;
+  }
+
+  my( $table, $st_ins, $field_a ) = @{ $i_req_cache_sh{$map} };
+
+  # }}}
+
+  my $id;
+  if( $map eq "CATEGORY" ) {
+    # {{{ $path, @name_a, $id: get the known part of $key
+
+    my $key_id = m_map_key_id( $map );
+
+    my $path = $key;
+    my @name_a = ();
+
+    $id = $path eq "" ? -1 : m_map_cache_key_id( $key_id, $path );
+    while( ! defined $id ) {
+      if( $path =~ /([^:].*):([^:]*)$/ ) {
+        unshift( @name_a, $2 ); $path = $1;
+      } elsif( $path =~ /^[^:]/ ) {
+        unshift( @name_a, $path ); $path = "";
+      } else {
+        last;
+      }
+      $id = $path eq "" ? -1 : m_map_cache_key_id( $key_id, $path );
+    }
+
+    if( ! defined $id ) {
+      # this should not happen
+      log_checkf( ": cannot find id for path=[$path]\n" );
+      return;
+    }
+
+    # }}}
+    for ( @name_a ) {
+      # {{{ $id: insert $path into database
+
+      if( $info_level >= 1 ) {
+        log_ninfol( "inserting required $table( PARENT=[$path], CATEGNAME=[$_] )\n" );
+      }
+
+      if( $dry_run ) {
+        $id = 0;
+      } elsif( defined $st_ins ) {
+        $st_ins->execute( $id, $_ );
+        $id = $m_db->last_insert_id();
+      }
+
+      $path = $path ne "" ? ( $path . ":" . $_ ) : $_;
+
+      # }}}
+      # {{{ insert $id, $path into $map
+
+      if( $info_level >= 3 ) {
+        log_infol( "inserting $map( $id, [$path] )\n" );
+      }
+
+      m_map_insert( $map, $id, $path );
+
+      # }}}
+    }
+  } else {
+    $id = m_map_key_id( $map, $key );
+    if( ! defined $id ) {
+      # {{{ $id: insert $key into database
+
+      if( $info_level >= 1 ) {
+        log_ninfol( "inserting required $table( $field_a->[0]=[$key] )\n" );
+      }
+
+      if( $dry_run ) {
+        $id = 0;
+      } elsif( defined $st_ins ) {
+        $st_ins->execute( $key );
+        $id = $m_db->last_insert_id();
+      }
+
+      # }}}
+      # {{{ insert $id, $key into $map
+
+      if( $info_level >= 3 ) {
+        log_infol( "inserting $map( $id, [$key] )\n" );
+      }
+
+      m_map_insert( $map, $id, $key );
+
+      # }}}
+    }
+  }
+
+  return $id;
+}
+
+# }}}
+# {{{ sub i_row_proc( $sheet, \%row ) -> $error
+# $sheet : (string) single-letter code of XLSX worksheet
+# %row   : ( $col => $value )
+# $error : 0: ok, 1: error
+# process the columns in %row for worksheet $sheet
+
+sub i_row_proc { my( $sheet, $row ) = @_;
+  my $match = 0;
+  # {{{ note on table order
+
+  # all tables are processed in the order of @i_table_cache_sa, which is the same order
+  # as in $i_sheet_sh{$sheet}. after a match is found, the remaining tables are also
+  # processed (the TABLE loop is not broken), in order to clear the cache of last id.
+  # notice that all "def last_id" operations in %i_sheet_sh refer to the last id of
+  # a previous table (with index smaller than the index of the current table).
+
+  # }}}
+  TABLE: for my $table_s ( @i_table_cache_sa ) {
+    next TABLE unless defined $table_s;
+    if( $match ) { $table_s->[1] = undef; next TABLE; }
+    my( $table, undef, $st_s, $field_aa, $field_saa ) = @$table_s;
+    # {{{ $st_* ($st_s), $f[0-4] ($field_aa)
+
+    my( $st_sel_0_1, $st_sel_023_1, $st_upd_23_0, $st_ins_1234 ) = @$st_s;
+
+    # shorter variable names
+    my $f0 = $field_aa->[0];
+    my $f1 = $field_aa->[1];
+    my $f2 = $field_aa->[2];
+    my $f3 = $field_aa->[3];
+    my $f4 = $field_aa->[4];
+
+    # }}}
+    $match = 1;
+    my %field_value = ();
+    # {{{ note on class order
+
+    # fields of class 2 (discriminator) are processed before fields of class 1 (key),
+    # because discriminator fields are expected to be empty if $row does not match $table,
+    # while key field may or may not be empty. therefore, in the usual case when $row
+    # does not match the current table, the matching trial may stop a little earlier.
+
+    # the current table if skipped if any field of class 1 or 2 is empty.
+    # if all fields of class 1 and 2 have been accepted, then either the row
+    # matches the current table, or an error is returned.
+
+    # }}}
+    CLASS: for my $class ( 2, 1, 3, 4 ) {
+      FIELD: for my $field_s ( @{ $field_saa->[$class] } ) {
+        my( undef, $field, $col_l, $type, $op, $param ) = @$field_s;
+        my $value;
+        # {{{ @col_a, @col_value, $col_def, $col_ne
+
+        my @col_a = ();
+        my @col_value = ();
+        my $col_def;
+        my $col_ne;
+
+        if( $col_l ne "" ) {
+          @col_a = split( ", ", $col_l );
+          $col_def = 1;
+          $col_ne = 1;
+          for my $col ( @col_a ) {
+            if( exists $row->{$col} ) {
+              push( @col_value, $row->{$col} );
+              $col_ne = 0 if $row->{$col} eq "";
+            } else {
+              push( @col_value, undef );
+              $col_def = 0;
+              $col_ne = 0;
+            }
+          }
+        }
+
+        # }}}
+        # {{{ $op_def, $op_name
+
+        my( $op_def, $op_name ) =
+          $op eq "def" ? ( 1, undef ) :
+          $op =~ /^def (.*)$/ ? ( 1, $1 ) :
+          ( 0, $op );
+
+        # }}}
+        # {{{ if ! $col_def && $op_def: get default value
+
+        if( ! $col_def && $op_def ) {
+          # {{{ if ! defined $op_name
+
+          if( ! defined $op_name ) {
+            $value = $param;
+          }
+
+          # }}}
+          # {{{ "choice"
+
+          elsif( $op_name eq "choice" ) {
+          if( $type eq "text" ) {
+            my @choice_a = split( ", ", $param );
+            $value = $choice_a[0];
+          } }
+
+          # }}}
+          # {{{ "first"
+
+          elsif( $op_name eq "first" ) {
+            for ( @col_value ) { if( $_ ne "" ) { $value = $_; last; } }
+          }
+
+          # }}}
+          # {{{ "gmtime"
+
+          elsif( $op_name eq "gmtime" ) {
+          if( $type eq "text" ) {
+            my( $sec, $min, $hour, $mday, $mon, $year, undef, undef, undef ) = gmtime();
+            $value = sprintf( "%04d-%02d-%02dT%02d:%02d:%02d",
+              $year + 1900, $mon + 1, $mday, $hour, $min, $sec
+            );
+          } }
+
+          # }}}
+          # {{{ "last_id"
+
+          elsif( $op_name eq "last_id" ) {
+          if( $type eq "id" ) {
+            $value = $i_table_cache_sa[$param]->[1] if defined $i_table_cache_sa[$param];
+          } }
+
+          # }}}
+          # {{{ "last_idn"
+
+          elsif( $op_name eq "last_idn" ) {
+          if( $type eq "idn" ) {
+            $value = - $i_table_cache_sa[$param]->[1] if defined $i_table_cache_sa[$param];
+          } }
+
+          # }}}
+          # {{{ "onempty"
+
+          elsif( $op_name eq "onempty" ) {
+          if( @col_value == 1 ) {
+            $value = $col_value[0];
+            $value = $param if $value eq "";
+          } }
+
+          # }}}
+          # {{{ else
+
+          else {
+            log_checkf( ": $table.$field has unknown op [def $op_name]\n" );
+            return 1;
+          }
+
+          # }}}
+        }
+
+        # }}}
+        # {{{ if $col_def: get and check value
+
+        elsif( $col_def ) {
+          # {{{ if ! defined $map_name
+
+          if( ! defined $op_name ) {
+          if( @col_value == 1 ) {
+            $value = $col_value[0];
+          } }
+
+          # }}}
+          # {{{ "choice"
+
+          elsif( $op_name eq "choice" ) {
+          if( @col_value == 1 && $type eq "text" ) {
+            my %choice_p = map { $_ => 1 } split( ", ", $param );
+            if( exists $choice_p{ $col_value[0] } ) {
+              $value = $col_value[0];
+            } elsif( $col_value[0] ne "" ) {
+              log_errorl( "$table.$field has unknown $col_l=[$col_value[0]]\n" );
+              return 1;
+            }
+          } }
+
+          # }}}
+          # {{{ "date0"
+
+          elsif( $op_name eq "date0" ) {
+          if( @col_value == 1 && $type eq "text" ) {
+            if( $col_value[0] ne "" ) {
+              $value = $col_value[0] . "T00:00:00";
+            }
+          } }
+
+          # }}}
+          # {{{ "first"
+
+          elsif( $op_name eq "first" ) {
+            for ( @col_value ) { if( $_ ne "" ) { $value = $_; last; } }
+          }
+
+          # }}}
+          # {{{ "gmtime"
+
+          elsif( $op_name eq "gmtime" ) {
+          if( $type eq "text" ) {
+            $value = $col_value[0];
+          } }
+
+          # }}}
+          # {{{ "key_id"
+
+          elsif( $op_name eq "key_id" ) {
+          if( @col_value == 1 && $col_ne && $type eq "id" ) {
+            my $key = $col_value[0];
+            my $map = $param // $col_l;
+            if( exists $m_map_sh{$map} ) {
+              $value = m_map_key_id( $map, $key );
+              if( ! defined $value ) {
+                log_errorl( "$table.$field has unknown $map=[$key]\n" );
+                return 1;
+              }
+            } else {
+              log_checkf( ": $table.$field has unknown key_id [$map]\n" );
+              return 1;
+            }
+          } }
+
+          # }}}
+          # {{{ "key_id_empty"
+
+          elsif( $op_name eq "key_id_empty" ) {
+          if( @col_value == 1 && $type eq "id" ) {
+            my $key = $col_value[0];
+            my $map = $param // $col_l;
+            if( exists $m_map_sh{$map} ) {
+              $value = $key eq "" ? -1 : m_map_key_id( $map, $key );
+              if( ! defined $value ) {
+                log_errorl( "$table.$field has unknown $map=[$key]\n" );
+                return 1;
+              }
+            } else {
+              log_checkf( ": $table.$field has unknown key_id [$map]\n" );
+              return 1;
+            }
+          } }
+
+          # }}}
+          # {{{ "nkey_id"
+
+          elsif( $op_name eq "nkey_id" ) {
+          if( $col_ne && $type eq "id" ) {
+            my $map = $param // $col_l;
+            my $sth = m_nkey_id( $map );
+            my $id_a = m_execute_col1( $sth, \@col_a, $row );
+            if( @$id_a == 1 ) {
+              $value = $id_a->[0];
+            } elsif( @$id_a == 0 ) {
+              log_errorl( "$table.$field ($col_l) has unknown value\n" );
+              return 1;
+            } else {
+              log_errorl( "$table.$field ($col_l) value is not unique\n" );
+              return 1;
+            }
+          } }
+
+          # }}}
+          # {{{ "onempty"
+
+          elsif( $op_name eq "onempty" ) {
+          if( @col_value == 1 ) {
+            $value = $col_value[0];
+            $value = $param if $value eq "";
+          } }
+
+          # }}}
+          # {{{ "path_name"
+
+          elsif( $op_name eq "path_name" ) {
+          if( @col_value == 1 && $type eq "text" ) {
+            my $path = $col_value[0];
+            if( $path =~ /([^:].*):([^:]*)$/ ) {
+              $value = $2;
+            } elsif( $path =~ /^[^:]/ ) {
+              $value = $path;
+            }
+          } }
+
+          # }}}
+          # {{{ "path_pid"
+
+          elsif( $op_name eq "path_pid" ) {
+          if( @col_value == 1 && $type eq "id" ) {
+            my $path = $col_value[0];
+            if( $path =~ /([^:].*):([^:]*)$/ ) {
+              $value = m_map_key_id( "CATEGORY", $1 );
+              if( ! defined $value ) {
+                log_errorl( "$table.$field has unknown CATEGORY=[$1]\n" );
+                return 1;
+              }
+            } elsif( $path =~ /^[^:]/ ) {
+              $value = -1;
+            }
+          } }
+
+          # }}}
+          # {{{ "repeats"
+
+          elsif( $op_name eq "repeats" ) {
+          if( @col_value == 2 && $col_ne && $type eq "integer" ) {
+            my( $key_auto, $key_freq ) = ( $col_value[0], $col_value[1] );
+
+            my $id_auto = m_map_key_id( "REPEATS_AUTO", $key_auto );
+            if( ! defined $id_auto ) {
+              log_errorl( "$table.$field has unknown REPEATS_AUTO=[$key_auto]\n" );
+              return 1;
+            }
+
+            my $id_freq = m_map_key_id( "REPEATS_FREQ", $key_freq );
+            if( ! defined $id_freq ) {
+              log_errorl( "$table.$field has unknown REPEATS_FREQ=[$key_freq]\n" );
+              return 1;
+            }
+
+            $value = $id_auto * 100 + $id_freq;
+          } }
+
+          # }}}
+          # {{{ "req key_id"
+
+          elsif( $op_name eq "req key_id" ) {
+          if( @col_value == 1 && $col_ne && $type eq "id" ) {
+            my $key = $col_value[0];
+            my $map = $param // $col_l;
+            if( exists $m_map_sh{$map} ) {
+              $value = i_req_id( $map, $key );
+            } else {
+              log_checkf( ": $table.$field has unknown key_id [$map]\n" );
+              return 1;
+            }
+          } }
+
+          # }}}
+          # {{{ "req key_id_empty"
+
+          elsif( $op_name eq "req key_id_empty" ) {
+          if( @col_value == 1 && $type eq "id" ) {
+            my $key = $col_value[0];
+            my $map = $param // $col_l;
+            if( exists $m_map_sh{$map} ) {
+              $value = $key eq "" ? -1 : i_req_id( $map, $key );
+            } else {
+              log_checkf( ": $table.$field has unknown key_id [$map]\n" );
+              return 1;
+            }
+          } }
+
+          # }}}
+          # {{{ else
+
+          else {
+            log_checkf( ": $table.$field has unknown op [$op_name]\n" );
+            return 1;
+          }
+
+          # }}}
+        }
+
+        # }}}
+        # {{{ $match
+
+        if( ( $class == 1 || $class == 2 ) && $value eq "" ) {
+          $match = 0;
+          next TABLE;
+        }
+
+        # }}}
+        # {{{ %field_value
+
+        if( ! defined $value ) {
+          log_errorl( "$table.$field in column ($col_l) is undefined\n" );
+          return 1;
+        }
+
+        if( $info_level >= 3 ) {
+          log_ninfol( "$table.$field=[$value]\n" );
+        }
+
+        $field_value{$field} = $value;
+
+        # }}}
+      }
+      if( $class == 3 ) {
+        # {{{ clear the cache of last id
+
+        $table_s->[1] = undef;
+
+        # }}}
+        # {{{ transform %field_value in info sheet
+
+        if( $sheet eq "i" ) {
+          my $name = $field_value{INFONAME};
+          # {{{ ignore "BASECURRENCYID"
+
+          if( $name eq "BASECURRENCYID" ) {
+            next TABLE;
+          }
+
+          # }}}
+          # {{{ convert "BASECURRENCY" to "BASECURRENCYID"
+
+          elsif( $name eq "BASECURRENCY" ) {
+            my $value = $field_value{INFOVALUE};
+            my $id = m_map_key_id( "CURRENCY", $value );
+            if( defined $id ) {
+              $field_value{INFONAME}  = "BASECURRENCYID";
+              $field_value{INFOVALUE} = $id;
+            } else {
+              log_errorl( "unknown $name=[$value]\n" );
+              next TABLE;
+            }
+          }
+
+          # }}}
+        }
+
+        # }}}
+        # {{{ skip existing record
+
+        if( defined $st_sel_0_1 ) {
+          my( $cnt, @row1 ) = m_execute_row1( $st_sel_0_1, $f1, \%field_value );
+
+          if( $cnt == 1 ) {
+            # store the rowid into the cache of last id
+            $table_s->[1] = $row1[0];
+            next TABLE;
+          }
+
+          elsif( $cnt > 1 ) {
+            my $key = join( ", ", @$f1 );
+            log_errorl( "$table( $key ) is not unique\n" );
+            return 1;
+          }
+        }
+
+        # }}}
+        # {{{ update existing record
+
+        elsif( defined $st_sel_023_1 ) {
+          my( $cnt, @row1 ) = m_execute_row1( $st_sel_023_1, $f1, \%field_value );
+
+          if( $cnt == 1 ) {
+            # {{{ store the rowid into the cache of last id
+
+            $table_s->[1] = $row1[0];
+
+            # }}}
+            # {{{ check if @row1 and %field_value are identical
+
+            my $col_j = 1;
+            for ( @$f2, @$f3 ) {
+              if( $field_value{$_} ne $row1[$col_j] ) { $col_j = 0; last; }
+              $col_j++;
+            }
+            if( $col_j != 0 ) {
+              # @row1 and %field_value are identical
+              next TABLE unless $i_update_all;
+            }
+
+            # }}}
+            # {{{ restrict update in info sheet
+
+            if( $sheet eq "i" ) {
+              my $name = $field_value{INFONAME};
+              if( $name =~ /^ATTACHMENTS.*/ || $name =~ /^BASECURRENCY.*/ ) {
+                if( $warn_level >= 1 ) {
+                  log_warnl( "update $name manually\n" );
+                }
+                next TABLE;
+              } elsif( $name eq "DATAVERSION" || $name eq "MMEXVERSION" || $name eq "UID" ) {
+                if( $warn_level >= 1 ) {
+                  log_warnl( "cannot update $name\n" );
+                }
+                next TABLE;
+              }
+            }
+
+            # }}}
+            # {{{ update database record
+
+            if( $info_level >= 1 ) {
+              my @fv = map { "$_=[$field_value{$_}]" } @$f1;
+              log_ninfol( "updating $table ("
+                . ( @fv > 0 ? join( ", ", @fv ) : "..." )
+                . " )\n"
+              );
+            }
+
+            if( defined $st_upd_23_0 ) {
+              $field_value{ $f0->[0] } = $row1[0];
+              m_execute( $st_upd_23_0, [ @$f2, @$f3, $f0->[0] ], \%field_value );
+              $i_attach_f = 1 if $table eq "ATTACHMENT_V1";
+            }
+
+            # note: the cache of database maps is not updated because the key fields
+            # of an existing record remain the same (only non-key fields are updated).
+
+            # }}}
+            next TABLE;
+          }
+
+          elsif( $cnt > 1 ) {
+            my $key = join( ", ", @$f1 );
+            log_errorl( "$table( $key ) is not unique\n" );
+            return 1;
+          }
+        }
+
+        # }}}
+      } elsif( $class == 4 ) {
+        # {{{ insert new record
+        # {{{ restrict insert in info sheet
+
+        if( $sheet eq "i" ) {
+          my $name = $field_value{INFONAME};
+          if( $name =~ /^ATTACHMENTS.*/ || $name =~ /^BASECURRENCY.*/ ) {
+            if( $warn_level >= 1 ) {
+              log_warnl( "add $name manually\n" );
+            }
+            next TABLE;
+          } elsif( $name eq "DATAVERSION" || $name eq "MMEXVERSION" || $name eq "UID" ) {
+            if( $warn_level >= 1 ) {
+              log_warnl( "cannot add $name\n" );
+            }
+            next TABLE;
+          }
+        }
+
+        # }}}
+        # {{{ $rowid: insert %field_value into database
+
+        if( $info_level >= 2 ) {
+          my $f = @$f1 > 0 ? $f1 : @$f2 > 0 ? $f2 : $f3;
+          my @fv = map { "$_=[$field_value{$_}]" } @$f;
+          log_ninfol( "inserting $table( "
+            . ( @fv > 0 ? join( ", ", @fv ) : "..." )
+            . " )\n"
+          );
+        }
+
+        my $rowid;
+        if( $dry_run ) {
+          $rowid = 0;
+        } elsif( defined $st_ins_1234 ) {
+          m_execute( $st_ins_1234, [ @$f1, @$f2, @$f3, @$f4 ], \%field_value );
+          $rowid = $m_db->last_insert_id();
+          $i_attach_f = 1 if $table eq "ATTACHMENT_V1";
+        }
+
+        # store $rowid into the cache of last id
+        $table_s->[1] = $rowid;
+
+        # }}}
+        # {{{ insert $rowid and key into the cache of maps
+
+        if( exists $m_table_map{$table} ) {
+          for my $map ( @{ $m_table_map{$table} } ) {
+            # the key of the map is the first key field defined for $table
+            my $key = $map eq "CATEGORY" ? $row->{PATH} : $field_value{ $f1->[0] };
+            if( $info_level >= 3 ) {
+              log_infol( "inserting $map( $rowid, [$key] )\n" );
+            }
+            m_map_insert( $map, $rowid, $key );
+          }
+        }
+
+        # }}}
+        # }}}
+      }
+    }
+  }
+
+  if( $info_level >= 3 ) {
+    log_sep();
+  }
+
+  return 0;
+}
+
+# }}}
+# {{{ sub i_ws_read( $sheet, $ws ) -> $error
+
+sub i_ws_read { my( $sheet, $ws ) = @_;
+  # {{{ %col_p: ( $col => 1 ) known columns
+
+  my $col_sa = $o_sheet_col_sa{$sheet};
+  my %col_p = ();
+
+  for ( @$col_sa ) {
+    my( $class, $col ) = ( $_->[0], $_->[2] );
+    if( $class == 0 ) { $col = "#"; } else { $col =~ s/^-> //; }
+    $col_p{ $col } = 1;
+  }
+
+  # }}}
+  # {{{ col_range, row_range
+
+  my( $col_min, $col_max ) = $ws->col_range();
+  my( $row_min, $row_max ) = $ws->row_range();
+
+  unless( 0 <= $col_min && $col_min <  $col_max ) {
+    log_checkf( ": unexpected column range: $col_min .. $col_max\n" );
+    return 1;
+  };
+  unless( 0 == $row_min && $row_min <= $row_max ) {
+    log_checkf( ": unexpected row range: $row_min .. $row_max\n" );
+    return 1;
+  }
+
+  if( $info_level >= 3 ) {
+    log_info( "col range: $col_min..$col_max\n" );
+    log_info( "row range: $row_min..$row_max\n" );
+  }
+
+  # }}}
+  # {{{ %col_index: ( $col => $col_i ) read header in row 0
+
+  my %col_index = ();
+
+  for my $col_i ( $col_min .. $col_max ) {
+    my $cell = $ws->get_cell( 0, $col_i );
+    next unless defined $cell;
+
+    my $col = $cell->unformatted();
+    $col = uc( $col );
+    next unless exists $col_p{$col};
+
+    if( ! exists $col_index{$col} ) {
+      $col_index{$col} = $col_i;
+    } else {
+      if( $warn_level >= 1 ) {
+        log_warn( "column [$col] already exists\n" );
+      }
+    }
+  }
+
+  if( $info_level >= 2 ) {
+    log_info( "known columns: " . scalar( keys %col_index ) . "\n" );
+  }
+
+  # }}}
+  # {{{ @i_table_cache_sa: cache of tables
+
+  @i_table_cache_sa = ();
+
+  my $table_sa = $i_sheet_sh{$sheet};
+  TABLE: for my $table_s ( @$table_sa ) {
+    my( $table, $unique, $field_sa ) = @$table_s;
+    # {{{ @field_aa, @field_saa
+
+    my $table_match = 1;
+    my @field_aa  = ( [], [], [], [], [] );
+    my @field_saa = ( [], [], [], [], [] );
+    FIELD: for my $field_s ( @$field_sa ) {
+      my( $class, $field, $col_l, $type, $op ) = @$field_s;
+      # {{{ if $class == 0: check that this is the first field of this class
+
+      if( $class == 0 && @{ $field_aa[$class] } > 0 ) {
+        log_checkf( ": $table has more than one rowid\n" );
+        next FIELD;
+      }
+
+      # }}}
+      # {{{ $col_e: $col_l is defined and all columns in $col_l are known
+
+      my $col_e;
+      if( $class != 0 && defined $col_l ) {
+        $col_e = 1;
+        for my $col ( split( ", ", $col_l ) ) {
+          if( ! exists $col_p{$col} ) {
+            log_checkf( ": $table.$field has an unknown column [$col]\n" );
+          }
+          if( ! exists $col_index{$col} ) {
+            $col_e = 0;
+          }
+        }
+      }
+
+      # }}}
+      # {{{ shortcut: skip this table if it cannot be matched
+
+      # note: for a row to match a table, all fields of class 1 (key), 2 (descriminator)
+      # must be defined (and non-empty)
+
+      if( ( $class == 1 || $class == 2 ) && ! $col_e &&
+        !( defined $op && ( $op eq "def" || $op =~ /^def / ) )
+      ) {
+        # this worksheet does not contain $col_l, and $op does not define a value,
+        # therefore this field is always undef
+        $table_match = 0;
+        last FIELD;
+      }
+
+      # }}}
+      # {{{ $class: 1->2, 4->3
+
+      if( $class == 1 && $i_key_unique && ! $unique ) {
+        $class = 2;
+      }
+
+      elsif( $class == 4 && $col_e == 1 ) {
+        $class = 3;
+      }
+
+      # }}}
+      push( @{ $field_aa[$class] },  $field );
+      push( @{ $field_saa[$class] }, $field_s );
+    }
+
+    if( ! $table_match ) {
+      push( @i_table_cache_sa, undef );
+      next TABLE;
+    }
+
+    # }}}
+    # {{{ @st_s
+
+    my @st_s = ();
+    # {{{ $u (%i_sheet_u), $f[0-4] (@field_aa)
+
+    my $u  = exists $i_sheet_u{$sheet};
+    my $f0 = $field_aa[0];
+    my $f1 = $field_aa[1];
+    my $f2 = $field_aa[2];
+    my $f3 = $field_aa[3];
+    my $f4 = $field_aa[4];
+
+    # }}}
+    # {{{ sel_0_1
+
+    if( ! $u && @$f0 == 1 && @$f1 > 0 ) {
+      my $w1 = join( " and ", map { "$_ = ?" } @$f1 );
+      my $sel_0_1 = "select "
+        . $f0->[0]
+        . "\nfrom $table\nwhere $w1";
+      #log_debugf( ": sel_0_1: $sel_0_1\n" );
+      push( @st_s, m_prepare( $sel_0_1 ) );
+    } else {
+      push( @st_s, undef );
+    }
+
+    # }}}
+    # {{{ sel_023_1
+
+    if( $u && @$f0 == 1 && @$f1 > 0 ) {
+      my $w1 = join( " and ", map { "$_ = ?" } @$f1 );
+      my $sel_023_1 = "select "
+        . join( ", ", ( @$f0, @$f2, @$f3 ) )
+        . "\nfrom $table\nwhere $w1";
+      #log_debugf( ": sel_023_1: $sel_023_1\n" );
+      push( @st_s, m_prepare( $sel_023_1 ) );
+    } else {
+      push( @st_s, undef );
+    }
+
+    # }}}
+    # {{{ upd_23_0
+
+    if( ! $dry_run && $u && @$f0 == 1 && @$f1 > 0 && ( @$f2 > 0 || @$f3 > 0 ) ) {
+
+      my $upd_23_0 = "update $table set "
+        . join( ", ", map { "$_ = ?" } ( @$f2, @$f3 ) )
+        . "\nwhere " . $f0->[0] . " = ?";
+      #log_debugf( ": upd_23_0: $upd_23_0\n" );
+      push( @st_s, m_prepare( $upd_23_0 ) );
+
+    } elsif( ! $dry_run ) {
+      push( @st_s, undef );
+    }
+
+    # }}}
+    # {{{ ins_1234
+
+    if( ! $dry_run ) {
+      my $ins_1234 = "insert into $table( "
+        . join( ", ", ( @$f1, @$f2, @$f3, @$f4 ) )
+        . " )\nvalues( "
+        . join( ", ", map { "?" } ( @$f1, @$f2, @$f3, @$f4 ) )
+        . " )";
+      #log_debugf( ": ins_1234: $ins_1234\n" );
+      push( @st_s, m_prepare( $ins_1234 ) );
+    }
+
+    # }}}
+
+    # }}}
+    push( @i_table_cache_sa, [ $table, undef, \@st_s, \@field_aa, \@field_saa ] );
+  }
+
+  # }}}
+  # {{{ $ws: process rows
+
+  my $primary_i;
+  $primary_i = $col_index{"#"} if exists $col_index{"#"};
+
+  for my $row_i ( 1 .. $row_max ) {
+    $log_line_n = $row_i + 1;
+
+    if( defined $primary_i ) {
+      my $cell = $ws->get_cell( $row_i, $primary_i );
+      next unless defined $cell;
+      next unless $cell->unformatted() > 0;
+    }
+
+    my %row = ();
+    for my $col ( keys %col_index ) {
+      my $col_i = $col_index{$col};
+      my $cell = $ws->get_cell( $row_i, $col_i );
+      $row{$col} = defined $cell ? $cell->unformatted() : "";
+    }
+
+    my $error = i_row_proc( $sheet, \%row );
+    return 1 if $error;
+  }
+
+  # }}}
+  return 0;
+}
+
+# }}}
+# }}}
+# {{{ check (-c)
+# {{{ var
+
+# flags
+my $c_nkey_f;  # (boolean) check non-unique keys
+
+# }}}
+
+# {{{ sub c_nkey()
+# check MMEX database for non-unique keys
+
+sub c_nkey {
+  for my $table ( @i_table_a ) {
+    my $table_s = $i_table_sh{$table};
+    my( $unique, $rowid, $key_a ) = @$table_s;
+    next if $unique || @$key_a == 0;
+
+    my $key_l = join( ", ", @$key_a );
+    my $query =
+      "select $key_l, count(*)" .
+      "\nfrom $table" .
+      "\ngroup by $key_l" .
+      "\nhaving count(*) > 1";
+
+    if( $info_level >= 1 ) {
+      log_info( "checking $table( $key_l )\n" );
+    }
+
+    log_open( "non-unique keys in $table" );
+    my $sth = $m_db->prepare( $query );
+    $sth->execute(); while( my @row = $sth->fetchrow_array() ) {
+      my @kv = ();
+      for my $i ( 0..$#{ $key_a } ) { push( @kv, "$key_a->[$i]=[$row[$i]]" ); }
+      log_plain( join( ", ", @kv ) . "\n" );
+    }
+    log_close();
+  }
+}
+
+# }}}
+# }}}
+# {{{ print (-p)
+# {{{ const
+
+# {{{ spec of keys in worksheets
+
+# %p_sheet_sh : ( $sheet => \@sheet_s )
+
+# @sheet_s : ( 0: $table, 1: $unique, 2: $key_l, 3? $query )
+
+# }}}
+my %p_sheet_sh = (
+  i => [ "INFOTABLE_V1",       1, "INFONAME" ],
+  u => [ "CURRENCYFORMATS_V1", 1, "CURRENCY_SYMBOL" ],
+  a => [ "ACCOUNTLIST_V1",     1, "ACCOUNTNAME" ],
+  e => [ "ASSETS_V1",          0, "ASSETNAME, STARTDATE" ],
+  s => [ "STOCK_V1",           0, "STOCKNAME, PURCHASEDATE" ],
+  h => [ "STOCKHISTORY_V1",    1, "SYMBOL, DATE" ],
+  c => [ "CATEGORY_V1",        1, "cp.CATEGPATH",
+    # {{{ query
+
+    "with recursive CATEGORY_PATH as (" .
+      "\n  select CATEGID, CATEGNAME as CATEGPATH" .
+      "\n  from CATEGORY_V1 where PARENTID = '-1'" .
+      "\n  union all" .
+      "\n  select c.CATEGID as CATEGID, cp.CATEGPATH || ':' || c.CATEGNAME as CATEGPATH" .
+      "\n  from CATEGORY_V1 c, CATEGORY_PATH cp" .
+      "\n  where c.PARENTID = cp.CATEGID" .
+    "\n) select CATEGPATH from CATEGORY_PATH" .
+    "\norder by CATEGPATH"
+
+    # }}}
+  ],
+  p => [ "PAYEE_V1",           1, "PAYEENAME" ],
+  g => [ "TAG_V1",             1, "TAGNAME" ],
+  f => [ "CUSTOMFIELD_V1",     0, "DESCRIPTION" ],
+  y => [ "BUDGETYEAR_V1",      1, "BUDGETYEARNAME" ],
+  b => [ "BUDGETTABLE_V1",     0, "y.BUDGETYEARNAME, cp.CATEGPATH",
+    # {{{ query
+
+    "with recursive CATEGORY_PATH as (" .
+      "\n  select CATEGID, CATEGNAME as CATEGPATH" .
+      "\n  from CATEGORY_V1 where PARENTID = '-1'" .
+      "\n  union all" .
+      "\n  select c.CATEGID as CATEGID, cp.CATEGPATH || ':' || c.CATEGNAME as CATEGPATH" .
+      "\n  from CATEGORY_V1 c, CATEGORY_PATH cp" .
+      "\n  where c.PARENTID = cp.CATEGID" .
+    "\n) select y.BUDGETYEARNAME, cp.CATEGPATH" .
+    "\nfrom BUDGETTABLE_V1 b, BUDGETYEAR_V1 y, CATEGORY_PATH cp" .
+    "\nwhere y.BUDGETYEARID = b.BUDGETYEARID and cp.CATEGID = b.CATEGID" .
+    "\norder by y.BUDGETYEARNAME, cp.CATEGPATH"
+
+    # }}}
+  ],
+  o => [ "REPORT_V1",          1, "REPORTNAME" ],
+);
+
+# non-separated list of sheet codes
+my $p_sheet_l = join( "", grep { exists $p_sheet_sh{$_} } @o_sheet_a );
+
+# }}}
+# {{{ var
+
+# flags
+my @p_sheet_a;  # ( $sheet, ... ) order of sheets
+my %p_sheet_h;  # ( $sheet => 1 ) set of sheets
+
+# }}}
+
+# {{{ sub p_sheet_key()
+# print the key fields in each sheet in @p_sheet_a
+
+sub p_sheet_key {
+  for my $sheet ( @p_sheet_a ) {
+    my $sheet_s = $p_sheet_sh{$sheet};
+    my( $table, $unique, $key_l, $query ) = @$sheet_s;
+    if( ! defined $query ) {
+      $query = "select $key_l from $table order by $key_l";
+    }
+
+    print "$log_fold_markers[0] $sheet $table( $key_l )\n";
+    my $sth = $m_db->prepare( $query );
+    $sth->execute(); while( my @row = $sth->fetchrow_array() ) {
+      print join( " | ", @row ) . "\n";
+    }
+    print "$log_fold_markers[1]\n";
+  }
+}
+
+# }}}
+# }}}
+
+# {{{ sub usage( $error, $topic=undef )
+
+sub usage { my( $error, $topic ) = @_;
+  my $fh = $error ? *STDERR : *STDOUT;
+  # {{{ -h
+
+  if( $cmd eq "" && $topic eq "" ) {
+    print $fh
+'usage: '. $prog_file .' $m_file.mmb [$prog_flag]* [$command]+
+
+$command
+  -o $o_file.xlsx [$cmd_flag]* : dump MMEX database to output XLSX file
+  -i $i_file.xlsx [$cmd_flag]* : update MMEX database from input XLSX file
+  -c [$cmd_flag]*              : check MMEX database
+  -p [$cmd_flag]*              : print key fields from MMEX database
+
+common (program and command) flags
+  -h        : show program/command usage and exit
+  -n        : dry run; show but do not execute write operations
+  -w[0-2]   : set program/command warning level (default: 1)
+  -l[0-2]   : set program/command log     level (default: 0)
+  -l        : alias for -l1
+
+program flags
+  -v        : show program version and exit
+  -vc       : show compatibility and exit
+';
+  }
+
+  # }}}
+  # {{{ -[oi] -h
+
+  elsif( ( $cmd eq "o" || $cmd eq "i" ) && $topic eq "" ) {
+    # {{{ $arg_cmd
+
+    my $arg_cmd = ( $cmd eq "o" ?
+      '-o $o_file.xlsx' :
+      '-i $i_file.xlsx'
+    );
+
+    # }}}
+    # {{{ $arg_n
+
+    my $arg_n = ( $cmd eq "o" ?
+      'output the following MMEX tables into worksheet with name $n' :
+      'input the following MMEX tables from worksheet with name $n'
+    );
+
+    # }}}
+    # {{{ $arg_sa*
+
+    my $arg_sa1 = ( $cmd eq "o" ?
+      '' :
+      ' except info'
+    );
+
+    my $arg_sa2 = ( $cmd eq "o" ?
+      ' -ni info' :
+      ''
+    );
+
+    # }}}
+    # {{{ $arg_other
+
+    my $arg_other = ( $cmd eq "o" ?
+      '
+  -cp     : add main id column into output workweheets
+  -ci     : add all id columns into output workweheets
+  -cs     : add auxiliary sort columns into output workweheets
+  -ca     : alias for -ci -cs'
+  : '
+  -ku     : restrict keys to unique fields in MMEX database
+  -ua     : update all existing records with keys (depend on -ku), except
+            info records. by default existing records with keys are ignored.
+            records without keys are always inserted (cannot be identified).
+            see -hsk for the list of keys in each worksheet and table.
+  -ul $s+ : update existing records with keys, from the worksheets $s+
+            that have been selected with -[ns]*
+            ($s+ is a list of worksheet codes without separator)
+  -ra     : add all required names. by default unknown names are invalid.
+            see -hrk for the list of keys corresponding to required names.
+  -rl $s+ : ($s = ['. $i_req_l .']) add required names in worksheet $s'
+    );
+
+    # }}}
+    # {{{ $arg_default
+
+    my $arg_default = ( $cmd eq "o" ?
+      '-sa (all worksheets except info)' :
+      '-sd t (transactions and its dependencies)'
+    );
+
+    # }}}
+    # {{{ $note
+
+    my $note = ( $cmd eq "o" ?
+      '' :
+      ''
+    );
+
+    # }}}
+    # {{{ $arg_hs
+
+    my $arg_hs = ( $cmd eq "o" ?
+      '' :
+      '
+  -hsk : key columns in each wosksheet table (depend on -ku)
+  -hsp : discriminating columns in each wosksheet table (non-empty)
+  -hsq : non-discriminating columns in each wosksheet table (may be empty)
+  -hso : optional columns in each wosksheet table (may be missing)
+  -hsr : required names in each wosksheet table'
+    );
+
+    # }}}
+    # {{{ $arg_ht
+
+    my $arg_ht = ( $cmd eq "o" ?
+      '' :
+      '
+  -hti : rowid (primary key) in each database table
+  -htk : key fields in each database table (depend on -ku)'
+    );
+
+    # }}}
+    # {{{ $arg_hr
+
+    my $arg_hr = ( $cmd eq "o" ?
+      '' :
+      '
+  -hri : rowid (primary key) in each table with required names
+  -hrk : key fields in each table with required names'
+    );
+
+    # }}}
+
+    print $fh
+'usage : '. $prog_file .' $m_file.mmb '. $arg_cmd .' [$cmd_flag]*
+
+$cmd_flag
+  -n$s $n : '. $arg_n .'
+            -ni (info)         : INFOTABLE_V1
+            -nu (currency)     : CURRENCYFORMATS_V1
+            -na (account)      : ACCOUNTLIST_V1
+            -ne (assets)       : ASSETS_V1
+            -ns (stock)        : STOCK_V1
+            -nh (history)      : STOCKHISTORY_V1
+            -nc (category)     : CATEGORY_V1
+            -np (payee)        : PAYEE_V1
+            -ng (tag)          : TAG_V1
+            -nf (field)        : CUSTOMFIELD_V1
+            -nt (transactions) : CHECKINGACCOUNT_V1
+            -nr (recurring)    : BILLSDEPOSITS_V1
+            -ny (year)         : BUDGETYEAR_V1
+            -nb (budget)       : BUDGETTABLE_V1
+            -no (report)       : REPORT_V1
+  -sa     : alias for all worksheets'. $arg_sa1 .', with their default names
+           '. $arg_sa2 .' -nu currency -na account -ne assets -ns stock
+            -nh history -nc category -np payee -ng tag -nf field
+            -nt transactions -nr recurring -ny year -nb budget -no report
+  -sl $s+ : ($s = ['. $o_sheet_l .']) alias for selected worksheets
+            -n$s $n ... ($n is the default name for worksheet $s)
+            ($s+ is a list of worksheet codes without separator)
+  -sd $s+ : ($s = ['. $o_sheet_l .']) alias for recursive dependencies
+            ... -n$s $n ... (preceded by all recursive dependencies)
+            (see -hd for the list of worksheet dependencies)'
+. $arg_other .'
+
+if no worksheets are selected with -[ns]*, the following is implied
+  '. $arg_default .'
+
+additional information
+  -hsn : worksheet default names
+  -hsd : worksheet dependencies
+  -hst : database tables (partially) contained in each worksheet'
+. $arg_hs .'
+  -hts : worksheets of each database table'
+. $arg_ht
+. $arg_hr .'
+';
+  }
+
+  # }}}
+  # {{{ -[oi] -hsn
+
+  # $sheet : $name
+  elsif( ( $cmd eq "o" || $cmd eq "i" ) && $topic eq "sn" ) {
+    for my $sheet ( @o_sheet_a ) {
+      my $name = $o_sheet_name{$sheet};
+      print $fh "$sheet : $name\n";
+    }
+  }
+
+  # }}}
+  # {{{ -[oi] -hsd
+
+  # $sheet -> $dep_l
+  elsif( ( $cmd eq "o" || $cmd eq "i" ) && $topic eq "sd" ) {
+    for my $sheet ( @o_sheet_a ) {
+      next unless @{ $o_sheet_dep_l{$sheet} } > 0;
+      print $fh "$sheet -> " . join( ", ", @{ $o_sheet_dep_l{$sheet} } ) . "\n";
+    }
+  }
+
+  # }}}
+  # {{{ -[oi] -hst
+
+  # $sheet : $table_l
+  elsif( ( $cmd eq "o" || $cmd eq "i" ) && $topic eq "st" ) {
+    for my $sheet ( @o_sheet_a ) {
+      my $table_l = join( ", ", @{ $i_sheet_table_a{$sheet} } );
+      print $fh "$sheet : $table_l\n";
+    }
+  }
+
+  # }}}
+  # {{{ -i    -hsk
+
+  # $sheet $table : $col, ... (key worksheet or computed columns)
+  elsif( $cmd eq "i" && $topic eq "sk" ) {
+    my $w_max = 0;
+    for my $round ( 0, 1 ) {
+    for my $sheet ( @o_sheet_a ) {
+    for my $table_s ( @{ $i_sheet_sh{$sheet} } ) {
+      my( $table, $unique, $field_sa ) = @$table_s;
+      next if $i_key_unique && ! $unique;
+      # {{{ @col_a
+
+      my @col_a = ();
+      my %col_h = ();
+
+      for my $field_s ( @$field_sa ) {
+        my( $class, $field, $col_l, $type, $op, $param ) = @$field_s;
+        next unless $class == 1;
+        my @a;
+        if( defined $col_l ) {
+          @a = split( ", ", $col_l );
+        } elsif( $op eq "def" ) {
+          @a = ( "\"$param\"" );
+        } elsif( $op =~ /^def (.*)/ ) {
+          @a = "($1)";
+        } else {
+          @a = ".check($op)";
+        }
+
+        for my $col ( @a ) {
+          next if exists $col_h{$col};
+          push( @col_a, $col );
+          $col_h{$col} = 1;
+        }
+
+        last if $round == 0;
+      }
+
+      next unless @col_a;
+
+      # }}}
+      if( $round == 0 ) {
+        my $w = length( $table );
+        $w_max = $w if $w_max < $w;
+      } else {
+        printf $fh "%s %-$w_max" . "s : %s\n", $sheet, $table, join( ", ", @col_a );
+      }
+    } } }
+  }
+
+  # }}}
+  # {{{ -i    -hsp
+
+  # $sheet $table : $col, ... (key or discriminator columns)
+  elsif( $cmd eq "i" && $topic eq "sp" ) {
+    my $w_max = 0;
+    for my $round ( 0, 1 ) {
+    for my $sheet ( @o_sheet_a ) {
+    for my $table_s ( @{ $i_sheet_sh{$sheet} } ) {
+      my( $table, $unique, $field_sa ) = @$table_s;
+      # {{{ @col_a
+
+      my @col_a = ();
+      my %col_h = ();
+
+      for my $field_s ( @$field_sa ) {
+        my( $class, $field, $col_l, $type, $op, $param ) = @$field_s;
+        next unless $class == 1 || $class == 2;
+        my @a;
+        if( defined $col_l ) {
+          @a = split( ", ", $col_l );
+        } elsif( $op eq "def" ) {
+          @a = ( "\"$param\"" );
+        } elsif( $op =~ /^def (.*)/ ) {
+          @a = "($1)";
+        } else {
+          @a = ".check($op)";
+        }
+
+        for my $col ( @a ) {
+          next if exists $col_h{$col};
+          push( @col_a, $col );
+          $col_h{$col} = 1;
+        }
+
+        last if $round == 0;
+      }
+
+      next unless @col_a;
+
+      # }}}
+      if( $round == 0 ) {
+        my $w = length( $table );
+        $w_max = $w if $w_max < $w;
+      } else {
+        printf $fh "%s %-$w_max" . "s : %s\n", $sheet, $table, join( ", ", @col_a );
+      }
+    } } }
+  }
+
+  # }}}
+  # {{{ -i    -hsq
+
+  # $sheet $table : $col, ... (defined columns)
+  elsif( $cmd eq "i" && $topic eq "sq" ) {
+    my $w_max = 0;
+    for my $round ( 0, 1 ) {
+    for my $sheet ( @o_sheet_a ) {
+    for my $table_s ( @{ $i_sheet_sh{$sheet} } ) {
+      my( $table, $unique, $field_sa ) = @$table_s;
+      # {{{ @col_a
+
+      my @col_a = ();
+      my %col_h = ();
+
+      for my $field_s ( @$field_sa ) {
+        my( $class, $field, $col_l, $type, $op, $param ) = @$field_s;
+        next unless $class == 3;
+        my @a;
+        if( defined $col_l ) {
+          @a = split( ", ", $col_l );
+        } else {
+          @a = ".check($op)";
+        }
+
+        for my $col ( @a ) {
+          next if exists $col_h{$col};
+          push( @col_a, $col );
+          $col_h{$col} = 1;
+        }
+
+        last if $round == 0;
+      }
+
+      next unless @col_a;
+
+      # }}}
+      if( $round == 0 ) {
+        my $w = length( $table );
+        $w_max = $w if $w_max < $w;
+      } else {
+        printf $fh "%s %-$w_max" . "s : %s\n", $sheet, $table, join( ", ", @col_a );
+      }
+    } } }
+  }
+
+  # }}}
+  # {{{ -i    -hso
+
+  # $sheet $table : $col, ... (default columns)
+  elsif( $cmd eq "i" && $topic eq "so" ) {
+    my $w_max = 0;
+    for my $round ( 0, 1 ) {
+    for my $sheet ( @o_sheet_a ) {
+    for my $table_s ( @{ $i_sheet_sh{$sheet} } ) {
+      my( $table, $unique, $field_sa ) = @$table_s;
+      # {{{ @col_a
+
+      my @col_a = ();
+      my %col_h = ();
+
+      for my $field_s ( @$field_sa ) {
+        my( $class, $field, $col_l, $type, $op, $param ) = @$field_s;
+        next unless $class == 4;
+        next unless defined $col_l;
+
+        my @a = split( ", ", $col_l );
+        if( @a == 1 && $op eq "def" ) {
+          @a = ( "$a[0]=\"$param\"" ) if $param ne "";
+        } elsif( @a == 1 && $op eq "def choice" ) {
+          my @param_a = split( ", ", $param );
+          @a = ( "$a[0]=\"$param_a[0]\"" );
+        } elsif( @a == 1 && $op eq "def col" ) {
+          @a = ( "$a[0]=$param" );
+        } elsif( @a == 1 && $op =~ /^def (.*)/ ) {
+          @a = ( "$a[0]=($1)" );
+        } elsif( @a == 2 && $op =~ "def first" ) {
+          @a = ( "$a[0]=$a[1]" );
+        } else {
+          @a = map { "$_=($op" . ( $param ne "" ? "; $param" : "" ) . ")" } @a;
+        }
+
+        for my $col ( @a ) {
+          next if exists $col_h{$col};
+          push( @col_a, $col );
+          $col_h{$col} = 1;
+        }
+
+        last if $round == 0;
+      }
+
+      next unless @col_a;
+
+      # }}}
+      if( $round == 0 ) {
+        my $w = length( $table );
+        $w_max = $w if $w_max < $w;
+      } else {
+        printf $fh "%s %-$w_max" . "s : %s\n", $sheet, $table, join( ", ", @col_a );
+      }
+    } } }
+  }
+
+  # }}}
+  # {{{ -i    -hsr
+
+  # $sheet $table : $col, ... (required columns)
+  elsif( $cmd eq "i" && $topic eq "sr" ) {
+    my $w_max = 0;
+    for my $round ( 0, 1 ) {
+    for my $sheet ( @o_sheet_a ) {
+    for my $table_s ( @{ $i_sheet_sh{$sheet} } ) {
+      my( $table, $unique, $field_sa ) = @$table_s;
+      # {{{ @col_a
+
+      my @col_a = ();
+
+      for my $field_s ( @$field_sa ) {
+        my( $class, $field, $col_l, $type, $op, $param ) = @$field_s;
+        next if $class == 0;
+        next unless $op =~ /^req /;
+
+        push( @col_a, $col_l );
+
+        last if $round == 0;
+      }
+
+      next unless @col_a;
+
+      # }}}
+      if( $round == 0 ) {
+        my $w = length( $table );
+        $w_max = $w if $w_max < $w;
+      } else {
+        printf $fh "%s %-$w_max" . "s : %s\n", $sheet, $table, join( ", ", @col_a );
+      }
+    } } }
+  }
+
+  # }}}
+  # {{{ -i    -hri
+
+  # $sheet $table : $field, ... (rowid fields)
+  elsif( $cmd eq "i" && $topic eq "ri" ) {
+    my $w_max = 0;
+    for my $round ( 0, 1 ) { for my $sheet ( @i_req_a ) {
+      my $table_s = $i_req_sh{$sheet};
+      my( $map, $table, $field_sa ) = @$table_s;
+      my @field_a = map { $_->[1] } grep { $_->[0] == 0 } @$field_sa;
+      if( $round == 0 ) {
+        my $w = length( $table );
+        $w_max = $w if $w_max < $w;
+      } else {
+        printf $fh "%s %-$w_max" . "s : %s\n", $sheet, $table, join( ", ", @field_a );
+      }
+    } }
+  }
+
+  # }}}
+  # {{{ -i    -hrk
+
+  # $sheet $table : $field, ... (key fields)
+  elsif( $cmd eq "i" && $topic eq "rk" ) {
+    my $w_max = 0;
+    for my $round ( 0, 1 ) { for my $sheet ( @i_req_a ) {
+      my $table_s = $i_req_sh{$sheet};
+      my( $map, $table, $field_sa ) = @$table_s;
+      my @field_a = map { $_->[1] } grep { $_->[0] == 1 } @$field_sa;
+      if( $round == 0 ) {
+        my $w = length( $table );
+        $w_max = $w if $w_max < $w;
+      } else {
+        printf $fh "%s %-$w_max" . "s : %s\n", $sheet, $table, join( ", ", @field_a );
+      }
+    } }
+  }
+
+  # }}}
+  # {{{ -[oi] -hts
+
+  # $table : $sheet_l
+  elsif( ( $cmd eq "o" || $cmd eq "i" ) && $topic eq "ts" ) {
+    my $w_max = 0;
+    for my $round ( 0, 1 ) {
+    for my $table ( @i_table_a ) {
+      if( $round == 0 ) {
+        my $w = length( $table );
+        $w_max = $w if $w_max < $w;
+      } else {
+        my $sheet_a = $i_table_sheet_a{$table};
+        printf $fh "%-$w_max" . "s : %s%s\n", $table, join( ", ", @$sheet_a );
+      }
+    } }
+  }
+
+  # }}}
+  # {{{ -i    -hti
+
+  # $table : $rowid
+  elsif( $cmd eq "i" && $topic eq "ti" ) {
+    my $w_max = 0;
+    for my $round ( 0, 1 ) { for my $table ( @i_table_a ) {
+      my( $unique, $rowid, undef ) = @{ $i_table_sh{$table} };
+      if( $round == 0 ) {
+        my $w = length( $table );
+        $w_max = $w if $w_max < $w;
+      } else {
+        printf $fh "%-$w_max" . "s : %s\n", $table, $rowid ;
+      }
+    } }
+  }
+
+  # }}}
+  # {{{ -i    -htk
+
+  # $table : (unique) $key_l
+  elsif( $cmd eq "i" && $topic eq "tk" ) {
+    my $w_max = 0;
+    for my $round ( 0, 1 ) { for my $table ( @i_table_a ) {
+      my( $unique, undef, $key_a ) = @{ $i_table_sh{$table} };
+      next unless ( ! $i_key_unique || $unique ) && @$key_a;
+      if( $round == 0 ) {
+        my $w = length( $table );
+        $w_max = $w if $w_max < $w;
+      } else {
+        my $sep = $unique ? ":-" : ":=";
+        printf $fh "%-$w_max" . "s %s %s\n", $table, $sep, join( ", ", @$key_a );
+      }
+    } }
+  }
+
+  # }}}
+  # {{{ -c    -h
+
+  elsif( $cmd eq "c" && $topic eq "" ) {
+    print $fh
+'usage : '. $prog_file .' $m_file.mmb -c [$cmd_flag]*
+
+$cmd_flag
+  -ku : check MMEX database for non-unique keys
+';
+  }
+
+  # }}}
+  # {{{ -p    -h
+
+  elsif( $cmd eq "p" && $topic eq "" ) {
+    print $fh
+'usage : '. $prog_file .' $m_file.mmb -p [$cmd_flag]*
+
+$cmd_flag
+  -sl $s+ : ($s = ['. $p_sheet_l .']) print key fields in selected worksheets
+            ($s+ is a list of worksheet codes without separator)
+  -sa     : alias for all worksheets
+';
+  }
+
+  # }}}
+  # {{{ else
+
+  elsif( $cmd ne "" && $topic ne "" ) {
+    log_error( "unknown usage flag -$cmd -h$topic\n" );
+  }
+
+  # }}}
+  m_close( $error ); exit( $error );
+}
+
+# }}}
+# {{{ sub version( $f )
+
+sub version { my( $f ) = @_;
+  print STDOUT "$prog_name $prog_version\n";
+  if( $f eq "" || $f eq "ersion" ) {
+  } elsif( $f eq "c" ) {
+    print STDOUT "  compatible with MMEX $m_mmex_version, DATAVERSION $m_data_version\n";
+    print STDOUT "  compatible with Excel .xlsx (XML-based) file format\n";
+  } else {
+    print STDOUT "  unknown version flag [-v$f]\n";
+  }
+  m_close(0); exit(0);
+}
+
+# }}}
+# {{{ sub proc()
+
+sub proc {
+  # {{{ o
+
+  if( $cmd eq "o" ) {
+    m_open( 0 );
+    # {{{ @x_sheet_a: if empty, add all sheets
+
+    if( @x_sheet_a == 0 ) {
+      x_sheet_all();
+    }
+
+    if( $debug_level >= 1 ) {
+      x_log_args();
+      log_debugf( ": o_class_f=(" . join( ",", @o_class_f ) . ")\n" );
+    }
+
+    # }}}
+    # {{{ $wb: open XLSX file $x_file
+
+    my $wb;  # workbook handle
+
+    if( -e $x_file ) {
+      log_fatal( "XLSX output file [$x_file] already exists\n" );
+      m_close(1); exit(1);
+    }
+
+    if( $dry_run || $info_level >= 1 ) {
+      log_ninfo( "creating output XLSX file [$x_file]\n" );
+    }
+
+    if( ! $dry_run ) {
+      $wb = Excel::Writer::XLSX->new( $x_file );
+
+      if( ! defined $wb ) {
+        log_fatal( "cannot open output XLSX file [$x_file]\n" );
+        m_close(1); exit(1);
+      }
+    }
+
+    # }}}
+    # {{{ $wb: create worksheets
+
+    log_open( "$x_file" );
+
+    my $format_a;  # { $name => $wb_format }
+
+    if( ! $dry_run ) {
+      $format_a = o_wb_format( $wb );
+    }
+
+    for my $sheet ( @x_sheet_a ) {
+      my $name = $x_sheet_name{$sheet};
+      my $ws;
+
+      if( $dry_run || $info_level >= 1 ) {
+        log_ninfo( "creating worksheet $sheet [$name]\n" );
+      }
+
+      if( ! $dry_run ) {
+        $ws = $wb->add_worksheet( $name );
+      }
+
+      log_open( "worksheet $sheet [$name]" );
+      o_ws_write( $sheet, $ws, $format_a );
+      log_close();
+    }
+
+    undef %$format_a;
+
+    log_close();
+
+    # }}}
+    # {{{ $wb: close XLSX file
+
+    if( $info_level >= 2 ) {
+      log_ninfo( "closing output XLSX file [$x_file]\n" );
+    }
+
+    $wb->close() if defined $wb;
+
+    # }}}
+  }
+
+  # }}}
+  # {{{ i
+
+  if( $cmd eq "i" ) {
+    m_open( ! $dry_run );
+    # {{{ @x_sheet_a: if empty, add all sheets
+
+    if( @x_sheet_a == 0 ) {
+      x_sheet_all();
+    }
+
+    if( $debug_level >= 1 ) {
+      x_log_args();
+      my $ku = $i_key_unique ? "TRUE" : "FALSE";
+      my @su = grep { exists $i_sheet_u{$_} } @x_sheet_a;
+      my @sr = grep { exists $i_sheet_r{$_} } @o_sheet_a;
+      log_debugf( ": i_key_unique=$ku\n" );
+      log_debugf( ": i_sheet_u=" . join( "", @su ) . "\n" );
+      log_debugf( ": i_sheet_r=" . join( "", @sr ) . "\n" );
+    }
+
+    # }}}
+    # {{{ prepare cache of required worksheets
+
+    i_req_prepare();
+
+    # }}}
+    # {{{ $wb: parse XLSX file
+
+    my $wb; # workbook handle
+
+    if( ! -f $x_file ) {
+      log_fatal( "XLSX input file [$x_file] does not exist\n" );
+      m_close(1); exit(1);
+    }
+
+    if( $info_level >= 1 ) {
+      log_info( "parsing input XLSX file [$x_file]\n" );
+    }
+
+    my $parser = Spreadsheet::ParseXLSX->new;
+    my $wb = $parser->parse( $x_file );
+
+    if( ! defined $wb ) {
+      log_fatal( "cannot parse input XLSX file [$x_file]\n" );
+      m_close(1); exit(1);
+    }
+
+    # }}}
+    # {{{ $wb: read worksheets
+
+    my $error = 0;
+
+    log_open( "$x_file" );
+
+    for my $sheet ( @x_sheet_a ) {
+      my $name = $x_sheet_name{$sheet};
+      if( ! exists $i_sheet_sh{$sheet} ) {
+        log_checkf( ": unknown worksheet $sheet [$name]\n" );
+        next;
+      };
+
+      my $ws = $wb->worksheet( $name );
+
+      if( ! defined $ws ) {
+        if( $warn_level >= 1 ) {
+          log_warn( "cannot find worksheet $sheet [$name]\n" );
+        }
+        next;
+      }
+
+      if( $info_level >= 1 ) {
+        log_info( "reading worksheet $sheet [$name]\n" );
+      }
+
+      log_open( "worksheet $sheet [$name]" );
+      $error = i_ws_read( $sheet, $ws );
+      log_close();
+
+      last if $error;
+    }
+
+    log_close();
+
+    if( $error ) { m_close(1); exit(1); }
+
+    if( $i_attach_f ) {
+      if( $warn_level >= 1 ) {
+        log_warn( "move attachment files manually\n" );
+      }
+    }
+
+    # }}}
+  }
+
+  # }}}
+  # {{{ c
+
+  if( $cmd eq "c" ) {
+    m_open( 0 );
+    if( $c_nkey_f ) { c_nkey(); }
+  }
+
+  # }}}
+  # {{{ p
+
+  if( $cmd eq "p" ) {
+    m_open( 0 );
+    p_sheet_key();
+  }
+
+  # }}}
+}
+
+# }}}
+# {{{ main
+
+{
+  # {{{ log state
+
+  log_init();
+
+  # }}}
+  # {{{ program state
+
+  my $error = 0;
+
+  my $prog_dry_run     = $dry_run;
+  my $prog_warn_level  = $warn_level;
+  my $prog_info_level  = $info_level;
+  my $prog_debug_level = $debug_level;
+
+  # }}}
+  ARG: while( 1 ) {
+    # {{{ no arguments
+
+    if( @ARGV == 0 ) {
+      usage(1) if $cmd eq "";
+      proc();
+      last ARG;
+    }
+
+    # }}}
+    # {{{ $_: next argument
+
+    $_ = shift;
+
+    # }}}
+
+    # program/command flags
+    # {{{ -h
+
+    if( $_ eq "-h" )  {
+      usage(0);
+    }
+
+    # }}}
+    # {{{ -n
+
+    elsif( $_ eq "-n" ) {
+      $dry_run = 1;
+      $prog_dry_run = $dry_run if $cmd eq "";
+    }
+
+    # }}}
+    # {{{ -w$level
+
+    elsif( $_ eq "-w" ) {
+      $warn_level = 1;
+      $prog_warn_level = $warn_level if $cmd eq "";
+    }
+
+    elsif( $_ =~ /-w([0-9])$/ ) {
+      $warn_level = 0 + $1;
+      $prog_warn_level = $warn_level if $cmd eq "";
+    }
+
+    # }}}
+    # {{{ -l$level
+
+    elsif( $_ eq "-l" ) {
+      $info_level = 1;
+      $prog_info_level = $info_level if $cmd eq "";
+    }
+
+    elsif( $_ =~ /-l([0-9])$/ ) {
+      $info_level = 0 + $1;
+      $prog_info_level = $info_level if $cmd eq "";
+    }
+
+    # }}}
+    # {{{ -L$level
+
+    # undocumented flags
+
+    elsif( $_ eq "-L" ) {
+      $debug_level = 1;
+      $prog_debug_level = $debug_level if $cmd eq "";
+    }
+
+    elsif( $_ =~ /-L([0-9])$/ ) {
+      $debug_level = 0 + $1;
+      $prog_debug_level = $debug_level if $cmd eq "";
+    }
+
+    elsif( $_ eq "-Lq" ) {
+      $debug_query = 1;
+    }
+
+    # }}}
+
+    # program flags
+    # {{{ -v
+
+    elsif( $cmd eq "" && $_ =~ /^-v(.*)$/ ) {
+      version( $1 );
+    }
+
+    # }}}
+    # {{{ $m_file (does not start with -)
+
+    elsif( $cmd eq "" && $_ !~ /^-/ ) {
+      usage(1) if defined $m_file;
+      $m_file = $_;
+    }
+
+    # }}}
+
+    # -[oi] command flags
+    # {{{ -[oi]
+
+    elsif( $_ =~ /^-([oi])$/ ) {
+      proc() if $cmd ne "";
+
+      $dry_run     = $prog_dry_run;
+      $info_level  = $prog_info_level;
+      $debug_level = $prog_debug_level;
+      $cmd         = $1;
+
+      $x_file       = "";
+      @x_sheet_a    = ();
+      %x_sheet_name = ();
+
+      if( $_ eq "-o" ) {
+        @o_class_f = ( 0, 0, 0, 1, 1 );
+      } elsif( $_ eq "-i" ) {
+        $i_key_unique = 0;
+        $i_update_all = 0;
+        %i_sheet_u = ();
+        %i_sheet_r = ();
+        $i_attach_f = 0;
+      }
+    }
+
+    # }}}
+    # {{{ -[oi] -h$t
+
+    elsif( ( $cmd eq "o" || $cmd eq "i" ) && $_ =~ /^-h(.+)$/ ) {
+      usage( 0, $1 );
+    }
+
+    # }}}
+    # {{{ -[oi] -n$s $name
+
+    elsif( ( $cmd eq "o" || $cmd eq "i" ) && $_ =~ /^-n(.)$/ ) {
+      my $sheet = $1;
+      if( ! exists $o_sheet_p{$sheet} ) {
+        log_fatal( "unknown worksheet [$sheet]\n" );
+        $error = 1; last ARG;
+      }
+
+      if( exists $x_sheet_name{$sheet} ) {
+        if( $warn_level >= 1 ) {
+          log_warn( "worksheet $sheet is already selected\n" );
+        }
+      } else {
+        push( @x_sheet_a, $sheet );
+      }
+
+      usage(1) if @ARGV == 0;
+      my $name = shift;
+      $x_sheet_name{$sheet} = $name unless exists $x_sheet_name{$sheet};
+    }
+
+    # }}}
+    # {{{ -[oi] -sa
+
+    elsif( ( $cmd eq "o" || $cmd eq "i" ) && $_ eq "-sa" ) {
+      x_sheet_all();
+    }
+
+    # undocumented flag
+    elsif( ( $cmd eq "o" || $cmd eq "i" ) && $_ eq "-sA" ) {
+      x_sheet_all( 1 );
+    }
+
+    # }}}
+    # {{{ -[oi] -sl $sheet_l
+
+    elsif( ( $cmd eq "o" || $cmd eq "i" ) && $_ eq "-sl" ) {
+      usage(1) if @ARGV == 0;
+      my $sheet_l = shift;
+      for my $sheet ( split( //, $sheet_l ) ) {
+        if( ! exists $o_sheet_p{$sheet} ) {
+          log_fatal( "unknown worksheet -sl [$sheet]\n" );
+          $error = 1; last ARG;
+        }
+
+        if( exists $x_sheet_name{$sheet} ) {
+          if( $warn_level >= 1 ) {
+            log_warn( "worksheet $sheet is already selected\n" );
+          }
+        } else {
+          push( @x_sheet_a, $sheet );
+          $x_sheet_name{$sheet} = $o_sheet_name{$sheet};
+        }
+      }
+    }
+
+    # }}}
+    # {{{ -[oi] -sd $sheet_l
+
+    elsif( ( $cmd eq "o" || $cmd eq "i" ) && $_ eq "-sd" ) {
+      usage(1) if @ARGV == 0;
+      my $sheet_l = shift;
+      my @sheet_a = ();
+      for my $sheet ( split( //, $sheet_l ) ) {
+        if( ! exists $o_sheet_p{$sheet} ) {
+          log_fatal( "unknown worksheet -sd [$sheet]\n" );
+          $error = 1; last ARG;
+        }
+        push( @sheet_a, $sheet );
+      }
+      x_sheet_dep( \@sheet_a );
+    }
+
+    # }}}
+    # {{{ -o    -c$c
+
+    elsif( $cmd eq "o" && $_ =~ /^-c(.)$/ ) {
+      my $c = $1;
+      if( ! exists $o_class_flag{$c} ) {
+        log_fatal( "unknown column flag [$c]\n" );
+        $error = 1; last ARG;
+      }
+      for my $class ( @{ $o_class_flag{$c} } ) {
+        $o_class_f[$class] = 1;
+      }
+    }
+
+    # }}}
+    # {{{ -i    -f$flag
+
+    # undocumented flag
+    elsif( $cmd eq "i" && $_ eq "-fU" ) {
+      $i_update_all = 1;
+    }
+
+    # }}}
+    # {{{ -i    -ku
+
+    elsif( $cmd eq "i" && $_ eq "-ku" ) {
+      $i_key_unique = 1;
+    }
+
+    # }}}
+    # {{{ -i    -ua
+
+    elsif( $cmd eq "i" && $_ eq "-ua" ) {
+      for my $sheet ( @o_sheet_a ) {
+        next if $sheet eq "i";
+        $i_sheet_u{$sheet} = 1;
+      }
+    }
+
+    # undocumented flag
+    elsif( ( $cmd eq "i" ) && $_ eq "-uA" ) {
+      for my $sheet ( @o_sheet_a ) {
+        $i_sheet_u{$sheet} = 1;
+      }
+    }
+
+    # }}}
+    # {{{ -i    -ul $sheet_l
+
+    elsif( $cmd eq "i" && $_ eq "-ul" ) {
+      usage(1) if @ARGV == 0;
+      my $sheet_l = shift;
+      for my $sheet ( split( //, $sheet_l ) ) {
+        if( ! exists $o_sheet_p{$sheet} ) {
+          log_fatal( "unknown worksheet -ul [$sheet]\n" );
+          $error = 1; last ARG;
+        }
+        $i_sheet_u{$sheet} = 1;
+      }
+    }
+
+    # }}}
+    # {{{ -i    -ra
+
+    elsif( $cmd eq "i" && $_ eq "-ra" ) {
+      for my $sheet ( @i_req_a ) {
+        $i_sheet_r{$sheet} = 1;
+      }
+    }
+
+    # }}}
+    # {{{ -i    -rl $sheet_l
+
+    elsif( $cmd eq "i" && $_ eq "-rl" ) {
+      usage(1) if @ARGV == 0;
+      my $sheet_l = shift;
+      for my $sheet ( split( //, $sheet_l ) ) {
+        if( ! exists $i_req_sh{$sheet} ) {
+          log_fatal( "unknown worksheet -rl [$sheet]\n" );
+          $error = 1; last ARG;
+        }
+        $i_sheet_r{$sheet} = 1;
+      }
+    }
+
+    # }}}
+    # {{{ -[oi] $x_file (does not start with -)
+
+    elsif( ( $cmd eq "o" || $cmd eq "i" ) && $_ !~ /^-/ ) {
+      usage(1) if $x_file ne "";
+      $x_file = $_;
+    }
+
+    # }}}
+
+    # -c command flags
+    # {{{ -c
+
+    elsif( $_ eq "-c" ) {
+      proc() if $cmd ne "";
+
+      $dry_run     = $prog_dry_run;
+      $info_level  = $prog_info_level;
+      $debug_level = $prog_debug_level;
+      $cmd         = "c";
+
+      $c_nkey_f = 0;
+    }
+
+    # }}}
+    # {{{ -c -ku
+
+    elsif( $cmd eq "c" && $_ eq "-ku" ) {
+      $c_nkey_f = 1;
+    }
+
+    # }}}
+
+    # -p command flags
+    # {{{ -p
+
+    elsif( $_ eq "-p" ) {
+      proc() if $cmd ne "";
+
+      $dry_run     = $prog_dry_run;
+      $info_level  = $prog_info_level;
+      $debug_level = $prog_debug_level;
+      $cmd         = "p";
+
+      @p_sheet_a = ();
+      %p_sheet_h = ();
+    }
+
+    # }}}
+    # {{{ -p -sa
+
+    elsif( $cmd eq "p" && $_ eq "-sa" ) {
+      for my $sheet ( @o_sheet_a ) {
+        next unless exists $p_sheet_sh{$sheet};
+        if( exists $p_sheet_h{$sheet} ) {
+          if( $warn_level >= 1 ) {
+            log_warn( "worksheet $sheet is already selected\n" );
+          }
+        } else {
+          push( @p_sheet_a, $sheet );
+          $p_sheet_h{$sheet} = 1;
+        }
+      }
+    }
+
+    # }}}
+    # {{{ -p -sl $sheet_l
+
+    elsif( $cmd eq "p" && $_ eq "-sl" ) {
+      usage(1) if @ARGV == 0;
+      my $sheet_l = shift;
+      for my $sheet ( split( //, $sheet_l ) ) {
+        if( ! exists $p_sheet_sh{$sheet} ) {
+          log_fatal( "unknown worksheet -sl [$sheet]\n" );
+          $error = 1; last ARG;
+        }
+
+        if( exists $p_sheet_h{$sheet} ) {
+          if( $warn_level >= 1 ) {
+            log_warn( "worksheet $sheet is already selected\n" );
+          }
+        } else {
+          push( @p_sheet_a, $sheet );
+          $p_sheet_h{$sheet} = 1;
+        }
+      }
+    }
+
+    # }}}
+
+    # {{{ else
+
+    else  {
+      usage(1);
+    }
+
+    # }}}
+  }
+  m_close( $error ); exit( $error );
+}
+
+# }}}
+# {{{ quit
+
+END {
+  log_quit();
+}
+
+# }}}
+
+# {{{ note
+# {{{ 2024-07-21: programming style
+
+# this program is written in perl, but not in idiomatic perl. in particular, it is not
+# an exercise in writing compact perl code. in most cases, a long form is preferred to
+# a compact form, e.g.,
+#   if( ! defined $variable ) {
+#     command();
+#   }
+# is preferred to
+#   command() unless defined $variable;
+# although reading the code is often easier in the compact form, editing the code
+# (e.g., inserting debug messages, adding more control statements inside a block,
+# commenting-out lines, etc.) is usually easier in the long form.
+
+# the long form also promotes longer variable names, since it spans more lines.
+# in most cases, a variable name indicates (informally) the purpose and the type.
+# automatic variable names (like $_) are rarely used.
+
+# }}}
+# }}}
+# {{{ todo
+
+# - 2024-07-17: append MMEX file (flags similar to -i)
+#   -a $a_file.mmb : append $a_file.mmb into $m_file.mmb
+
+# - 2024-07-21: diff between MMEX files
+#   -d $d_file.mmb : changes from $d_file.mmb to $m_file.mmb
+
+# - 2024-07-10: analyze database queries
+#   consider creating temporary indexes for long tables
+
+# - 2024-07-14: fix rounding errors in numeric (floating-point) fields
+#   small (insignificant) rounding errors after output (-o) and input (-i -fU)
+
+# }}}
