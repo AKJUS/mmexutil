@@ -1,5 +1,5 @@
 # mmexutil
-Utilities for Money Manager Ex (MMEX) database
+Utilities for [Money Manager Ex (MMEX)](https://moneymanagerex.org) database
 
 ## Features
 
@@ -90,5 +90,6 @@ or the XLSX file before import.
 
 ## License
 
-Distributed under the BSD 3-Clause License. See LICENSE for more information.
+Distributed under the BSD 3-Clause License.
+See `license` fold at the beginning of `mmexutil`.
 

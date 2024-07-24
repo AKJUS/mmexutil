@@ -3,27 +3,27 @@
 # {{{ changelog
 
 # * 2024-07-21: George Ef <george.a.ef@gmail.com>
-#   created version 1.0.0.
+#   created version 1.0.0. compatible with MMEX 1.8.0 (DATAVERSION 3).
 
 # }}}
-# {{{ license (BSD 3-clause)
+# {{{ license
+# BSD 3-Clause License
 
 # Copyright (c) 2024, georgeef
-# All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #
-# * Redistributions of source code must retain the above copyright notice, this
-#   list of conditions and the following disclaimer.
+# 1. Redistributions of source code must retain the above copyright notice, this
+#    list of conditions and the following disclaimer.
 #
-# * Redistributions in binary form must reproduce the above copyright notice,
-#   this list of conditions and the following disclaimer in the documentation
-#   and/or other materials provided with the distribution.
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
 #
-# * Neither the name of the copyright holder nor the names of its
-#   contributors may be used to endorse or promote products derived from
-#   this software without specific prior written permission.
+# 3. Neither the name of the copyright holder nor the names of its
+#    contributors may be used to endorse or promote products derived from
+#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -38,6 +38,78 @@
 
 # }}}
 # {{{ note
+# {{{ 2024-07-21: program version
+
+# the program version is of the form $N$B.$I.$D, where
+# $N (no version)     : "" (empty), "n", "N"
+# $B (behavior)       : (integer) indicates features, formats, usage interface
+# $I (implementation) : (integer) indicates code changes, bugfixes
+# $D (dependencies)   : (integer) indicates the versions of used modules
+
+# the $B version number MUST be increased when the program behavior is changed,
+# e.g., important features are added/removed, or input/output formats are changed,
+# or the usage interface (command-line syntax) is broken. it MAY stay the same for
+# minor changes in program behavior, but in this case either the $I number must
+# be increased, or an $N flag must be added.
+
+# the $I version number MUST be increased when the program implementation is changed,
+# either without (significant) changes in behavior, or in order to fix wrong behavior.
+# in the latter case, the actual program behavior is changed (maybe significantly),
+# but the intended (documented) behavior does not change. the $I number MAY stay the
+# same for minor implementation changes, but in this case an $N flag must be added.
+
+# the $D version number MUST be increased when the version of a used module is changed,
+# without any other (significant) change in program code, e.g., after the program
+# has been tested with the latest module versions. a new D release may also contain
+# minor implementation changes, but in general the $D number is tracking changes
+# in used modules, not changes in the program itself.
+
+# notice that a specific program version uses specific module versions, not just the
+# installed or the latest module versions. a change of used module versions may result
+# in a change of program behavior or execution time.
+
+# lower-rank version numbers SHOULD be reset to 0, when a higher-rank number
+# is increased, e.g., $D should be reset to 0 when $I is increased.
+
+# the $N flag, if present, means "no version". it is added in front of a version
+# when the program of this version is changed in any way (behavior, implementation,
+# dependency version), but the author does not bother to register a new version.
+# if the program date is not updated, an $N flag MUST be added also in front of it.
+# n$B.$I.$D (pronounced: not $B.$I.$D) may mean anything from "version $B.$I.$D with
+# too little changes to deserve a new version", to "version $B.$I.$D with experimental
+# changes, in preparation for the next I or B release" (in the latter case a "p"
+# flag may be better, e.g., p$B.$I.$D may predate the future version $B.$I.$D).
+# from a user's perspective, the $N flag means "dirty flag", i.e., N versions should
+# be avoided; for this puropse, it is placed in front rather than at the end.
+
+# package maintainers may need to adapt the program for compliance or consistency
+# with their repository. if they change a depencency version and they cannot
+# register a new D version, they SHOULD add an additional suffix (e.g., "-$S"),
+# since the modified program may have different behavior or execution time.
+# for minor modifications, they MAY keep the version without additional suffix,
+# as long as nothing has been changed in program bahavior and execution time.
+# if in doubt, they can always add a suffix.
+
+# }}}
+# {{{ 2024-07-21: programming style
+
+# this program is written in perl, but not in idiomatic perl. in particular, it is not
+# an exercise in writing compact perl code. in most cases, a long form is preferred to
+# a compact form, e.g.,
+#   if( ! defined $variable ) {
+#     command();
+#   }
+# is preferred to
+#   command() unless defined $variable;
+# although reading the code is often easier in the compact form, editing the code
+# (e.g., inserting debug messages, adding more control statements inside a block,
+# commenting-out lines, etc.) is usually easier in the long form.
+
+# the long form also promotes longer variable names, since it spans more lines.
+# in most cases, a variable name indicates (informally) the purpose and the type.
+# automatic variable names (like $_) are rarely used.
+
+# }}}
 # {{{ 2024-05-15: MMEX (.mmb) database schema
 # see: MMEX 1.8.0 src/db/sql_tables.sql
 # {{{ INFOTABLE_V1
@@ -334,59 +406,6 @@
 # DESCRIPTION     TEXT
 
 # }}}
-# }}}
-# {{{ 2024-07-21: program version
-
-# the program version is of the form $N$B.$I.$D, where
-# $N (no version)     : "" (empty), "n", "N"
-# $B (behavior)       : (integer) indicates features, formats, usage interface
-# $I (implementation) : (integer) indicates code changes, bugfixes
-# $D (dependencies)   : (integer) indicates the versions of used modules
-
-# the $B version number MUST be increased when the program behavior is changed,
-# e.g., important features are added/removed, or input/output formats are changed,
-# or the usage interface (command-line syntax) is broken. it MAY stay the same for
-# minor changes in program behavior, but in this case either the $I number must
-# be increased, or an $N flag must be added.
-
-# the $I version number MUST be increased when the program implementation is changed,
-# either without (significant) changes in behavior, or in order to fix wrong behavior.
-# in the latter case, the actual program behavior is changed (maybe significantly),
-# but the intended (documented) behavior does not change. the $I number MAY stay the
-# same for minor implementation changes, but in this case an $N flag must be added.
-
-# the $D version number MUST be increased when the version of a used module is changed,
-# without any other (significant) change in program code, e.g., after the program
-# has been tested with the latest module versions. a new D release may also contain
-# minor implementation changes, but in general the $D number is tracking changes
-# in used modules, not changes in the program itself.
-
-# notice that a specific program version uses specific module versions, not just the
-# installed or the latest module versions. a change of used module versions may result
-# in a change of program behavior or execution time.
-
-# lower-rank version numbers SHOULD be reset to 0, when a higher-rank number
-# is increased, e.g., $D should be reset to 0 when $I is increased.
-
-# the $N flag, if present, means "no version". it is added in front of a version
-# when the program of this version is changed in any way (behavior, implementation,
-# dependency version), but the author does not bother to register a new version.
-# if the program date is not updated, an $N flag MUST be added also in front of it.
-# n$B.$I.$D (pronounced: not $B.$I.$D) may mean anything from "version $B.$I.$D with
-# too little changes to deserve a new version", to "version $B.$I.$D with experimental
-# changes, in preparation for the next I or B release" (in the latter case a "p"
-# flag may be better, e.g., p$B.$I.$D may predate the future version $B.$I.$D).
-# from a user's perspective, the $N flag means "dirty flag", i.e., N versions should
-# be avoided; for this puropse, it is placed in front rather than at the end.
-
-# package maintainers may need to adapt the program for compliance or consistency
-# with their repository. if they change a depencency version and they cannot
-# register a new D version, they SHOULD add an additional suffix (e.g., "-$S"),
-# since the modified program may have different behavior or execution time.
-# for minor modifications, they MAY keep the version without additional suffix,
-# as long as nothing has been changed in program bahavior and execution time.
-# if in doubt, they can always add a suffix.
-
 # }}}
 # }}}
 
@@ -6441,27 +6460,6 @@ END {
 
 # }}}
 
-# {{{ note
-# {{{ 2024-07-21: programming style
-
-# this program is written in perl, but not in idiomatic perl. in particular, it is not
-# an exercise in writing compact perl code. in most cases, a long form is preferred to
-# a compact form, e.g.,
-#   if( ! defined $variable ) {
-#     command();
-#   }
-# is preferred to
-#   command() unless defined $variable;
-# although reading the code is often easier in the compact form, editing the code
-# (e.g., inserting debug messages, adding more control statements inside a block,
-# commenting-out lines, etc.) is usually easier in the long form.
-
-# the long form also promotes longer variable names, since it spans more lines.
-# in most cases, a variable name indicates (informally) the purpose and the type.
-# automatic variable names (like $_) are rarely used.
-
-# }}}
-# }}}
 # {{{ todo
 
 # - 2024-07-17: append MMEX file (flags similar to -i)
