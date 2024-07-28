@@ -3,7 +3,7 @@
 # {{{ changelog
 
 # * 2024-07-21: George Ef <george.a.ef@gmail.com>
-#   created version 1.0.0. compatible with MMEX 1.8.0 (DATAVERSION 3).
+#   v1.0.0: compatible with MMEX 1.8.0 (DATAVERSION 3).
 
 # }}}
 # {{{ license
@@ -105,7 +105,7 @@
 # (e.g., inserting debug messages, adding more control statements inside a block,
 # commenting-out lines, etc.) is usually easier in the long form.
 
-# the long form also promotes longer variable names, since it spans more lines.
+# the long form also encourages longer variable names, since it spans more lines.
 # in most cases, a variable name indicates (informally) the purpose and the type.
 # automatic variable names (like $_) are rarely used.
 
@@ -429,7 +429,7 @@ use Spreadsheet::ParseXLSX 0.35 qw();
 # in front of the version date (see the note "program version" above).
 
 my $prog_name    = "mmexutil";
-my $prog_version = "1.0.0 (2024-07-21)";
+my $prog_version = "n1.0.0 (n2024-07-21)";
 
 # }}}
 # {{{ var
@@ -1149,27 +1149,25 @@ for my $map ( keys %m_map_sh ) {
 # to enable it, change temporarily the debug threshold level below from 3 to 0.
 if( $debug_level >= 3 ) {
   log_debug( "m_map_table:\n" );
-  my $w_max = 0;
+  my @w = ( 0 );
   for my $round ( 0, 1 ) {
   for my $map ( sort keys %m_map_table ) {
     if( $round == 0 ) {
-      my $w = length( $map );
-      $w_max = $w if $w_max < $w;
+      my $w0 = length( $map ); $w[0] = $w0 if $w[0] < $w0;
     } else {
       my $table = $m_map_table{$map};
-      log_debug( sprintf( "  %-$w_max" . "s : %s\n", $map, $table ) );
+      log_debug( sprintf( "  %-$w[0]s : %s\n", $map, $table ) );
     }
   } }
   log_debug( "m_table_map:\n" );
-  my $w_max = 0;
+  my @w = ( 0 );
   for my $round ( 0, 1 ) {
   for my $table ( sort keys %m_table_map ) {
     if( $round == 0 ) {
-      my $w = length( $table );
-      $w_max = $w if $w_max < $w;
+      my $w0 = length( $table ); $w[0] = $w0 if $w[0] < $w0;
     } else {
       my $map_a = $m_table_map{$table};
-      log_debug( sprintf( "  %-$w_max" . "s : %s\n", $table, join( ", ", sort @$map_a ) ) );
+      log_debug( sprintf( "  %-$w[0]" . "s : %s\n", $table, join( ", ", sort @$map_a ) ) );
     }
   } }
 }
@@ -1907,7 +1905,7 @@ sub m_execute_col1 { my( $sth, $field_a, $field_value ) = @_;
 
 # $sheet   : (string) single-letter code of XLSX worksheet
 # $name    : (string) XLSX worksheet name
-# $dep_l   : (string) list of dependencies (sheet codes without separation)
+# $dep_l   : (string) non-separated list of dependencies (sheet codes)
 # $select  : (string) $query or sub( \@col_a ) -> $query: database query generator
 # $class   : 0: rowid, 1: sort, 2: id, 3: data, 4: outline
 # $lr      : (integer) row outline (group) level (0: not collapsed, >0: collapsed)
@@ -2920,16 +2918,16 @@ my @o_sheet_sa = (
 );
 # {{{ indexes
 
-my @o_sheet_a      = ();  # ( $sheet, ... )
-my %o_sheet_p      = ();  # ( $sheet => 1 )
+my @o_sheet_va     = ();  # ( $sheet, ... )
+my %o_sheet_vh     = ();  # ( $sheet => 1 )
 my %o_sheet_name   = ();  # ( $sheet => $name )
 my %o_sheet_dep_l  = ();  # ( $sheet => [ $dep, ... ] )
 my %o_sheet_col_sa = ();  # ( $sheet => [ $col_s, ... ] )
 my %o_sheet_select = ();  # ( $sheet => $select )
 
 for( @o_sheet_sa ) { my( $sheet, $name, $dep_l, $col_sa, $select ) = @$_;
-  push( @o_sheet_a, $sheet );
-  $o_sheet_p{$sheet}      = 1;
+  push( @o_sheet_va, $sheet );
+  $o_sheet_vh{$sheet}      = 1;
   $o_sheet_name{$sheet}   = $name;
   $o_sheet_dep_l{$sheet}  = [ split( //, $dep_l ) ];
   $o_sheet_col_sa{$sheet} = $col_sa;
@@ -2937,7 +2935,7 @@ for( @o_sheet_sa ) { my( $sheet, $name, $dep_l, $col_sa, $select ) = @$_;
 }
 
 # non-separated list of sheet codes
-my $o_sheet_l = join( "", @o_sheet_a );
+my $o_sheet_vl = join( "", @o_sheet_va );
 
 # }}}
 
@@ -2982,7 +2980,7 @@ my @o_class_f;     # ( 0: rowid, 1: sort, 2: id, 3: data, 4: outline ) -> boolea
 # if $cmd is "i" and $inc_i==0, exclude worksheet i
 
 sub x_sheet_all { my( $inc_i ) = @_;
-  for my $sheet ( @o_sheet_a ) {
+  for my $sheet ( @o_sheet_va ) {
     next if $sheet eq "i" && $cmd eq "i" && ! $inc_i;
     if( exists $x_sheet_name{$sheet} ) {
       if( $warn_level >= 1 ) {
@@ -3876,7 +3874,7 @@ my %i_sheet_table_a = ();  # ( $sheet => [ $table, ... ] )
 my %i_table_index   = ();  # ( $table => [ [ $sheet_i, $table_i, ... ], ... ] )
 my %i_table_sheet_a = ();  # ( $table => [ $sheet, ... ] )
 my %i_table_sh      = ();  # ( $table => [ $unique, $rowid, [ $key, ... ] )
-my @i_table_a       = ();  # ( $table, ... )
+my @i_table_va      = ();  # ( $table, ... )
 
 # {{{ %i_sheet_table_a
 
@@ -3896,8 +3894,8 @@ for my $sheet ( keys %i_sheet_sh ) {
 # }}}
 # {{{ %i_table_index
 
-for my $sheet_i ( 0..$#o_sheet_a ) {
-  my $sheet = $o_sheet_a[$sheet_i];
+for my $sheet_i ( 0..$#o_sheet_va ) {
+  my $sheet = $o_sheet_va[$sheet_i];
   my $table_sa = $i_sheet_sh{$sheet};
   for my $table_i ( 0..$#{ $table_sa } ) {
     my $table_s = $table_sa->[$table_i];
@@ -3919,7 +3917,7 @@ for my $sheet_i ( 0..$#o_sheet_a ) {
 
 for my $table ( keys %i_table_index ) {
   my $sheet_sa = $i_table_index{$table};
-  $i_table_sheet_a{$table} = [ map { $o_sheet_a[ $_->[0] ] } @$sheet_sa ];
+  $i_table_sheet_a{$table} = [ map { $o_sheet_va[ $_->[0] ] } @$sheet_sa ];
 }
 
 # }}}
@@ -3931,7 +3929,7 @@ for my $table ( keys %i_table_index ) {
 
   SHEET: for ( @{ $i_table_index{$table} } ) {
     my( $sheet_i, @table_ia ) = @$_;
-    my $sheet = $o_sheet_a[$sheet_i];
+    my $sheet = $o_sheet_va[$sheet_i];
     my $table_sa = $i_sheet_sh{$sheet};
     SHEET_TABLE: for my $table_i ( @table_ia ) {
       my $table_s = $table_sa->[$table_i];
@@ -4005,9 +4003,9 @@ for my $table ( keys %i_table_index ) {
 }
 
 # }}}
-# {{{ @i_table_a
+# {{{ @i_table_va
 
-@i_table_a =
+@i_table_va =
   map { $_->[0] }
   sort { $a->[-1]->[0] <=> $b->[-1]->[0] || $a->[-1]->[-1] <=> $b->[-1]->[-1] }
   map { [ $_, @{ $i_table_index{$_} } ] } keys %i_table_index;
@@ -4077,11 +4075,11 @@ my %i_req_sh = (
 );
 # {{{ indexes
 
-# list of sheet codes in the order of @o_sheet_a
-my @i_req_a = grep { exists $i_req_sh{$_} } @o_sheet_a;
+# list of sheet codes in the order of @o_sheet_va
+my @i_req_va = grep { exists $i_req_sh{$_} } @o_sheet_va;
 
 # non-separated list of sheet codes
-my $i_req_l = join( "", @i_req_a );
+my $i_req_vl = join( "", @i_req_va );
 
 # }}}
 
@@ -5125,7 +5123,7 @@ my $c_nkey_f;  # (boolean) check non-unique keys
 # check MMEX database for non-unique keys
 
 sub c_nkey {
-  for my $table ( @i_table_a ) {
+  for my $table ( @i_table_va ) {
     my $table_s = $i_table_sh{$table};
     my( $unique, $rowid, $key_a ) = @$table_s;
     next if $unique || @$key_a == 0;
@@ -5211,14 +5209,46 @@ my %p_sheet_sh = (
 );
 
 # non-separated list of sheet codes
-my $p_sheet_l = join( "", grep { exists $p_sheet_sh{$_} } @o_sheet_a );
+my $p_sheet_vl = join( "", grep { exists $p_sheet_sh{$_} } @o_sheet_va );
+
+# account type (used in cash flow)
+my $p_cash_type_vl = "wbcltas";
+my %p_cash_type_vh = (
+  # {{{ $type_code => $type_name
+
+  w => "Cash",
+  b => "Checking",
+  c => "Credit Card",
+  l => "Loan",
+  t => "Term",
+  # (not used in cash flow) i => "Investment",
+  a => "Asset",
+  s => "Shares",
+
+  # }}}
+);
+
+# days per month (for non-leap years)
+my @mon_days_a = ( 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 );
 
 # }}}
 # {{{ var
 
-# flags
+# flags (keys)
 my @p_sheet_a;  # ( $sheet, ... ) order of sheets
 my %p_sheet_h;  # ( $sheet => 1 ) set of sheets
+
+# flags (account)
+my $p_as;       # (boolean) show account statement date
+
+# flags (cash flow)
+my $p_cash_p;   # "f": financial year , "y": calendar year, "m": month
+my $p_cash_p1;  # first year/month (undef: year/month of first transaction)
+my $p_cash_p2;  # last  year/month
+my %p_cash_th;  # ( $account_type => 1 )
+my @p_cash_ua;  # ( $currency, ... )
+my %p_cash_uh;  # ( $currency => 1 )
+my $p_cash_uo;  # (boolean) other currencies
 
 # }}}
 
@@ -5240,6 +5270,421 @@ sub p_sheet_key {
     }
     print "$log_fold_markers[1]\n";
   }
+}
+
+# }}}
+# {{{ sub p_account_stmtdate()
+# print the statement date for each active account
+
+sub p_account_stmtdate {
+  my @a_sa = ();  # ( [ $account_name, $stmt_date ], ... )
+
+  my $query = "select ACCOUNTNAME, STATEMENTDATE" .
+    "\nfrom ACCOUNTLIST_V1" .
+    "\nwhere STATUS = 'Open'";
+    "\norder by ACCOUNTNAME";
+  my $sth = $m_db->prepare( $query );
+  $sth->execute(); while( my @row = $sth->fetchrow_array() ) {
+    push( @a_sa, [ @row ] );
+  }
+
+  print "$log_fold_markers[0] account stmt_date\n";
+  my @w = ( 0 );
+  for my $round ( 0, 1 ) {
+  for my $a_s ( @a_sa ) {
+    my( $a_name, $a_date ) = @$a_s;
+    if( $round == 0 ) {
+      my $w0 = length( $a_name ); $w[0] = $w0 if $w[0] < $w0;
+    } else {
+      print sprintf( "%-$w[0]s | %s\n", $a_name, $a_date );
+    }
+  } }
+  print "$log_fold_markers[1]\n";
+}
+
+# }}}
+# {{{ . sub p_cash_flow()
+# print cash flow
+
+sub p_cash_flow {
+  # {{{ $f_mon, $f_day, $date1, $date2
+
+  my( $f_mon, $f_day ) = ( 1, 1 );
+  my( $date1, $date2 );
+
+  if( $p_cash_p eq "f" ) {
+    my @row = $m_db->selectrow_array(
+      "select i1.INFOVALUE, i2.INFOVALUE" .
+      "\nfrom INFOTABLE_V1 i1, INFOTABLE_V1 i2" .
+      "\nwhere i1.INFONAME = 'FINANCIAL_YEAR_START_MONTH'" .
+      "\n  and i2.INFONAME = 'FINANCIAL_YEAR_START_DAY'"
+    );
+    if( @row == 2 ) {
+      ( $f_mon, $f_day ) = @row;
+    } else {
+      log_warn( "cannot find start of financial year\n" );
+    }
+
+    $date1 = defined $p_cash_p1 ?
+      sprintf( "%04d-%02d-%02d", $p_cash_p1 + 0, $f_mon, $f_day ) :
+      "";
+    $date2 =
+      sprintf( "%04d-%02d-%02d", $p_cash_p2 + 1, $f_mon, $f_day );
+  }
+
+  else {
+    $date1 = defined $p_cash_p1 ? $p_cash_p1 . "-00" : "";
+    $date2 = $p_cash_p2 . "-XX";
+  }
+
+  #log_debug( "date1=[$date1], date2=[$date2]\n" );
+
+  # }}}
+  my %per_sh  = ();  # ( $per => { $cur => [ $scale, $d_a, $w_a, $dw ] } )
+
+  # {{{ $query_t
+
+  my $query_t = "with TRANS as (" .
+    "\n  select " .
+      "TRANSDATE, TRANSCODE, ACCOUNTID, TOACCOUNTID, TRANSAMOUNT, TOTRANSAMOUNT" .
+    "\nfrom CHECKINGACCOUNT_V1" .
+    "\nwhere TRANSDATE >= ? and TRANSDATE < ? and STATUS != 'V'" .
+    "\n  and ( DELETEDTIME is null or DELETEDTIME = '' )" .
+    "\n) select " .
+      "t.TRANSDATE, u.CURRENCY_SYMBOL, u.SCALE, " .
+      "a.ACCOUNTTYPE, t.TRANSAMOUNT, NULL, NULL" .
+    "\nfrom TRANS t, ACCOUNTLIST_V1 a, CURRENCYFORMATS_V1 u" .
+    "\nwhere ( t.TRANSCODE = 'Withdrawal' or t.TRANSCODE = 'Transfer' )" .
+    "\n  and t.ACCOUNTID = a.ACCOUNTID and a.CURRENCYID = u.CURRENCYID" .
+    "\nunion all select " .
+      "t.TRANSDATE, u.CURRENCY_SYMBOL, u.SCALE, " .
+      "NULL, NULL, a.ACCOUNTTYPE, t.TRANSAMOUNT" .
+    "\nfrom TRANS t, ACCOUNTLIST_V1 a, CURRENCYFORMATS_V1 u" .
+    "\nwhere t.TRANSCODE = 'Deposit' " .
+    "\n  and t.ACCOUNTID = a.ACCOUNTID and a.CURRENCYID = u.CURRENCYID" .
+    "\nunion all select " .
+      "t.TRANSDATE, u.CURRENCY_SYMBOL, u.SCALE, " .
+      "NULL, NULL, a.ACCOUNTTYPE, t.TOTRANSAMOUNT" .
+    "\nfrom TRANS t, ACCOUNTLIST_V1 a, CURRENCYFORMATS_V1 u" .
+    "\nwhere t.TRANSCODE = 'Transfer' " .
+    "\n  and t.TOACCOUNTID = a.ACCOUNTID and a.CURRENCYID = u.CURRENCYID" .
+    "\nunion all select " .
+      "t.TRANSDATE, u.CURRENCY_SYMBOL, u.SCALE, " .
+      "a1.ACCOUNTTYPE, - min( t.TRANSAMOUNT, t.TOTRANSAMOUNT ), " .
+      "a2.ACCOUNTTYPE, - min( t.TRANSAMOUNT, t.TOTRANSAMOUNT )" .
+    "\nfrom TRANS t, ACCOUNTLIST_V1 a1, ACCOUNTLIST_V1 a2, CURRENCYFORMATS_V1 u" .
+    "\nwhere t.TRANSCODE = 'Transfer'" .
+    "\n  and t.ACCOUNTID = a1.ACCOUNTID and a1.CURRENCYID = u.CURRENCYID" .
+    "\n  and t.TOACCOUNTID = a2.ACCOUNTID and a2.CURRENCYID = u.CURRENCYID" .
+    "\norder by TRANSDATE, CURRENCY_SYMBOL";
+
+  # }}}
+  my $sth_t = $m_db->prepare( $query_t );
+  $sth_t->execute( $date1, $date2 );
+  while( my @row = $sth_t->fetchrow_array() ) {
+    my( $date, $cur, $scale, $w_t, $w_a, $d_t, $d_a ) = @row;
+    # {{{ check $w_t, $d_t
+
+    next if defined $w_t && ! exists $p_cash_th{$w_t};
+    next if defined $d_t && ! exists $p_cash_th{$d_t};
+
+    # }}}
+    # {{{ check $cur
+
+    next unless $p_cash_uo || exists $p_cash_uh{$cur};
+
+    # }}}
+    # {{{ $per: transform $date to year/month
+
+    my $per;
+
+    if( $p_cash_p eq "f" && $date =~ /^(\d+)-(\d+)-(\d+)/ ) {
+      $per = $1;
+      if( $2 < $f_mon || ( $2 == $f_mon && $3 < $f_day ) ) {
+        $per = sprintf( "%04d", $per - 1 );
+      }
+    }
+
+    elsif( $p_cash_p eq "y" && $date =~ /^(\d+)-/ ) {
+      $per = $1;
+    }
+
+    elsif( $p_cash_p eq "m" && $date =~ /^(\d+)-(\d+)-/ ) {
+      $per = "$1-$2";
+    }
+
+    # }}}
+    #log_debug( "t [$per], [$cur], [$scale], [$w_t], [$w_a], [$d_t], [$d_a]\n" );
+    # {{{ $per_sh{$per}->{$cur}
+
+    $per_sh{$per} = {} unless exists $per_sh{$per};
+    my $per_s = $per_sh{$per};
+    if( ! exists $per_s->{$cur} ) {
+      $per_s->{$cur} = [ $scale, $d_a, $w_a, undef ];
+    } else {
+      $per_s->{$cur}->[1] += $d_a if defined $d_a;
+      $per_s->{$cur}->[2] += $w_a if defined $w_a;
+    }
+
+    # }}}
+  }
+
+  # {{{ $query_r
+
+  my $query_r = "with RECUR as (" .
+    "\n  select " .
+      "TRANSDATE, REPEATS, NUMOCCURRENCES, " .
+      "TRANSCODE, ACCOUNTID, TOACCOUNTID, TRANSAMOUNT, TOTRANSAMOUNT" .
+    "\nfrom BILLSDEPOSITS_V1" .
+    "\nwhere TRANSDATE < ? and STATUS != 'V'" .
+    "\n) select " .
+      "r.TRANSDATE, r.REPEATS, r.NUMOCCURRENCES, " .
+      "u.CURRENCY_SYMBOL, u.SCALE, " .
+      "a.ACCOUNTTYPE, r.TRANSAMOUNT, NULL, NULL" .
+    "\nfrom RECUR r, ACCOUNTLIST_V1 a, CURRENCYFORMATS_V1 u" .
+    "\nwhere ( r.TRANSCODE = 'Withdrawal' or r.TRANSCODE = 'Transfer' )" .
+    "\n  and r.ACCOUNTID = a.ACCOUNTID and a.CURRENCYID = u.CURRENCYID" .
+    "\nunion all select " .
+      "r.TRANSDATE, r.REPEATS, r.NUMOCCURRENCES, " .
+      "u.CURRENCY_SYMBOL, u.SCALE, " .
+      "NULL, NULL, a.ACCOUNTTYPE, r.TRANSAMOUNT" .
+    "\nfrom RECUR r, ACCOUNTLIST_V1 a, CURRENCYFORMATS_V1 u" .
+    "\nwhere r.TRANSCODE = 'Deposit' " .
+    "\n  and r.ACCOUNTID = a.ACCOUNTID and a.CURRENCYID = u.CURRENCYID" .
+    "\nunion all select " .
+      "r.TRANSDATE, r.REPEATS, r.NUMOCCURRENCES, " .
+      "u.CURRENCY_SYMBOL, u.SCALE, " .
+      "NULL, NULL, a.ACCOUNTTYPE, r.TOTRANSAMOUNT" .
+    "\nfrom RECUR r, ACCOUNTLIST_V1 a, CURRENCYFORMATS_V1 u" .
+    "\nwhere r.TRANSCODE = 'Transfer' " .
+    "\n  and r.TOACCOUNTID = a.ACCOUNTID and a.CURRENCYID = u.CURRENCYID" .
+    "\nunion all select " .
+      "r.TRANSDATE, r.REPEATS, r.NUMOCCURRENCES, " .
+      "u.CURRENCY_SYMBOL, u.SCALE, " .
+      "a1.ACCOUNTTYPE, - min( r.TRANSAMOUNT, r.TOTRANSAMOUNT ), " .
+      "a2.ACCOUNTTYPE, - min( r.TRANSAMOUNT, r.TOTRANSAMOUNT )" .
+    "\nfrom RECUR r, ACCOUNTLIST_V1 a1, ACCOUNTLIST_V1 a2, CURRENCYFORMATS_V1 u" .
+    "\nwhere r.TRANSCODE = 'Transfer'" .
+    "\n  and r.ACCOUNTID = a1.ACCOUNTID and a1.CURRENCYID = u.CURRENCYID" .
+    "\n  and r.TOACCOUNTID = a2.ACCOUNTID and a2.CURRENCYID = u.CURRENCYID" .
+    "\norder by TRANSDATE, CURRENCY_SYMBOL";
+
+  # }}}
+  my $sth_r = $m_db->prepare( $query_r );
+  $sth_r->execute( $date2 );
+  while( my @row = $sth_r->fetchrow_array() ) {
+    my( $date, $repeats, $num, $cur, $scale, $w_t, $w_a, $d_t, $d_a ) = @row;
+    # {{{ check $w_t, $d_t
+
+    next if defined $w_t && ! exists $p_cash_th{$w_t};
+    next if defined $d_t && ! exists $p_cash_th{$d_t};
+
+    # }}}
+    # {{{ check $cur
+
+    next unless $p_cash_uo || exists $p_cash_uh{$cur};
+
+    # }}}
+    my $freq; { use integer; $freq = $repeats % 100; }
+    #log_debug( "r [$date], [$freq], [$num], [$cur], [$scale], [$w_t], [$w_a], [$d_t], [$d_a]\n" );
+    while( 1 ) {
+      last if $date ge $date2;
+      if( $date ge $date1 ) {
+        # {{{ $per: transform $date to year/month
+
+        my $per;
+
+        if( $p_cash_p eq "f" && $date =~ /^(\d+)-(\d+)-(\d+)/ ) {
+          $per = $1;
+          if( $2 < $f_mon || ( $2 == $f_mon && $3 < $f_day ) ) {
+            $per = sprintf( "%04d", $per - 1 );
+          }
+        }
+
+        elsif( $p_cash_p eq "y" && $date =~ /^(\d+)-/ ) {
+          $per = $1;
+        }
+
+        elsif( $p_cash_p eq "m" && $date =~ /^(\d+)-(\d+)-/ ) {
+          $per = "$1-$2";
+        }
+
+        # }}}
+        #log_debug( "r [$per], [$cur], [$scale], [$w_t], [$w_a], [$d_t], [$d_a]\n" );
+        # {{{ $per_sh{$per}->{$cur}
+
+        $per_sh{$per} = {} unless exists $per_sh{$per};
+        my $per_s = $per_sh{$per};
+        if( ! exists $per_s->{$cur} ) {
+          $per_s->{$cur} = [ $scale, $d_a, $w_a, undef ];
+        } else {
+          $per_s->{$cur}->[1] += $d_a if defined $d_a;
+          $per_s->{$cur}->[2] += $w_a if defined $w_a;
+        }
+
+        # }}}
+      }
+      $num-- if $num > 0 && ( $freq < 11 || $freq > 14 );
+      last if $freq == 0 || $num == 0;
+      last if $num == -1 && ( $freq == 11 || $freq == 12 );
+      # {{{ $date
+
+      if( $date =~ /^(\d+)-(\d+)-(\d+)/ ) {
+        my( $year, $mon, $day ) = ( $1, $2, $3 );
+        my( $delta_mon, $delta_day );
+
+           if( $freq ==  1 ) { $delta_day = 7; }
+        elsif( $freq ==  2 ) { $delta_day = 2*7; }
+        elsif( $freq ==  3 ) { $delta_mon = 1; }
+        elsif( $freq ==  4 ) { $delta_mon = 2; }
+        elsif( $freq ==  5 ) { $delta_mon = 3; }
+        elsif( $freq ==  6 ) { $delta_mon = 6; }
+        elsif( $freq ==  7 ) { $delta_mon = 1*12; }
+        elsif( $freq ==  8 ) { $delta_mon = 4; }
+        elsif( $freq ==  9 ) { $delta_day = 4*7; }
+        elsif( $freq == 10 ) { $delta_day = 1; }
+        elsif( $freq == 11 ) { $delta_day = $num; }
+        elsif( $freq == 12 ) { $delta_mon = $num; }
+        elsif( $freq == 13 ) { $delta_day = $num; }
+        elsif( $freq == 14 ) { $delta_mon = $num; }
+        elsif( $freq == 15 ) { $delta_mon = 1;
+          # if the offset to the end of a month is within one week,
+          # it is preserved by the following calculations
+        }
+        elsif( $freq == 16 ) { $delta_mon = 1;
+          # skip the adjustment from weekend to last weekday
+          # anyway both are in the same month
+        }
+
+        if( defined $delta_mon ) {
+          # check if $day is in the last week
+          my $mon_days = $mon_days_a[ $mon - 1 ];
+          if( $mon == 2 ) {
+            use integer;
+            $mon_days++ if $year % 4 == 0 && ( $year % 100 != 0 || $year % 400 == 0 );
+          }
+          $day -= $mon_days if $day > $mon_days - 7;
+
+          $delta_mon += $mon - 1;
+          my $delta_year;
+          { use integer; $delta_year = $delta_mon / 12; }
+          $delta_mon -= $delta_year * 12;
+          $mon = $delta_mon + 1;
+          $year += $delta_year;
+
+          if( $day < 1 ) {
+            $mon_days = $mon_days_a[ $mon - 1 ];
+            if( $mon == 2 ) {
+              use integer;
+              $mon_days++ if $year % 4 == 0 && ( $year % 100 != 0 || $year % 400 == 0 );
+            }
+            $day += $mon_days;
+          }
+        }
+
+        while( $delta_day > 0 ) {
+          my $mon_days = $mon_days_a[ $mon - 1 ];
+          if( $mon == 2 ) {
+            use integer;
+            $mon_days++ if $year % 4 == 0 && ( $year % 100 != 0 || $year % 400 == 0 );
+          }
+          if( $day + $delta_day <= $mon_days ) {
+            $day += $delta_day;
+            last;
+          }
+          $delta_day -= $mon_days - $day - 1;
+          $day = 1;
+          $mon++;
+          if( $mon > 12 ) { $year++; $mon = 1; }
+        }
+
+        $date = sprintf( "%04d-%02d-%02d", $year, $mon, $day );
+      }
+
+      else {
+        last;
+      }
+
+      # }}}
+      $num = -1 if $freq == 11 || $freq == 12;
+    }
+  }
+
+  print "$log_fold_markers[0] cash flow per " .
+    ( $p_cash_p eq "f" ? "financial year" : $p_cash_p eq "y" ? "calendar year" : "month" ) .
+    " (deposit, withdrawal, difference)\n";
+  my %scale_p = ();  # ( $scale => $precision )
+  my @w = ( 0, 0, 0, 0 );
+  for my $round ( 0, 1 ) {
+  for my $per ( sort keys %per_sh ) {
+    my $per_s = $per_sh{$per};
+    # {{{ @cur_a
+
+    my @cur_a;
+
+    if( $round == 0 ) {
+      @cur_a = keys %$per_s;
+    }
+
+    else {
+      # add currencies in the order of @p_cash_ua
+      my %cur_h = ();
+      for my $u ( @p_cash_ua ) {
+        next unless exists $per_s->{$u};
+        push( @cur_a, $u );
+        $cur_h{$u} = 1;
+      }
+
+      # add other curencies sorted by name
+      for my $u ( sort keys %$per_s ) {
+        next if exists $cur_h{$u};
+        push( @cur_a, $u );
+      }
+    }
+
+    # }}}
+    for my $cur ( @cur_a ) {
+      my $cur_s = $per_s->{$cur};
+      if( $round == 0 ) {
+        # {{{ @cur_p: currency precision
+
+        my $scale = $cur_s->[0];
+        my @cur_p = ( 0 );
+
+        if( exists $scale_p{$scale} ) {
+          $cur_p[0] = $scale_p{$scale};
+        } else {
+          while( $scale > 1 ) {
+            $cur_p[0] += 1;
+            $scale /= 10;
+          }
+        }
+
+        # }}}
+        # {{{ $cur_s: transform numeric values to strings
+
+        $cur_s->[3] = $cur_s->[1] - $cur_s->[2];
+        $cur_s->[1] = sprintf( "%.$cur_p[0]f", $cur_s->[1] );
+        $cur_s->[2] = sprintf( "%.$cur_p[0]f", $cur_s->[2] );
+        $cur_s->[3] = sprintf( "%.$cur_p[0]f", $cur_s->[3] );
+
+        # }}}
+        # {{{ @w
+
+        my $w0 = length( $cur );        $w[0] = $w0 if $w[0] < $w0;
+        my $w1 = length( $cur_s->[1] ); $w[1] = $w1 if $w[1] < $w1;
+        my $w2 = length( $cur_s->[2] ); $w[2] = $w2 if $w[2] < $w2;
+        my $w3 = length( $cur_s->[3] ); $w[3] = $w3 if $w[3] < $w3;
+
+        # }}}
+      } else {
+        printf( "%s | %-$w[0]s | %$w[1]s | %$w[2]s | %$w[3]s\n",
+          $per, $cur, $cur_s->[1], $cur_s->[2], $cur_s->[3]
+        );
+      }
+    }
+  } }
+  print "$log_fold_markers[1]\n";
 }
 
 # }}}
@@ -5323,10 +5768,10 @@ program flags
             see -hsk for the list of keys in each worksheet and table.
   -ul $s+ : update existing records with keys, from the worksheets $s+
             that have been selected with -[ns]*
-            ($s+ is a list of worksheet codes without separator)
+            ($s+ is a non-separated list of worksheet codes)
   -ra     : add all required names. by default unknown names are invalid.
             see -hrk for the list of keys corresponding to required names.
-  -rl $s+ : ($s = ['. $i_req_l .']) add required names in worksheet $s'
+  -rl $s+ : ($s = ['. $i_req_vl .']) add required names in worksheet $s'
     );
 
     # }}}
@@ -5404,10 +5849,10 @@ $cmd_flag
            '. $arg_sa2 .' -nu currency -na account -ne assets -ns stock
             -nh history -nc category -np payee -ng tag -nf field
             -nt transactions -nr recurring -ny year -nb budget -no report
-  -sl $s+ : ($s = ['. $o_sheet_l .']) alias for selected worksheets
+  -sl $s+ : ($s = ['. $o_sheet_vl .']) alias for selected worksheets
             -n$s $n ... ($n is the default name for worksheet $s)
-            ($s+ is a list of worksheet codes without separator)
-  -sd $s+ : ($s = ['. $o_sheet_l .']) alias for recursive dependencies
+            ($s+ is a non-separated list of worksheet codes)
+  -sd $s+ : ($s = ['. $o_sheet_vl .']) alias for recursive dependencies
             ... -n$s $n ... (preceded by all recursive dependencies)
             (see -hd for the list of worksheet dependencies)'
 . $arg_other .'
@@ -5431,7 +5876,7 @@ additional information
 
   # $sheet : $name
   elsif( ( $cmd eq "o" || $cmd eq "i" ) && $topic eq "sn" ) {
-    for my $sheet ( @o_sheet_a ) {
+    for my $sheet ( @o_sheet_va ) {
       my $name = $o_sheet_name{$sheet};
       print $fh "$sheet : $name\n";
     }
@@ -5442,7 +5887,7 @@ additional information
 
   # $sheet -> $dep_l
   elsif( ( $cmd eq "o" || $cmd eq "i" ) && $topic eq "sd" ) {
-    for my $sheet ( @o_sheet_a ) {
+    for my $sheet ( @o_sheet_va ) {
       next unless @{ $o_sheet_dep_l{$sheet} } > 0;
       print $fh "$sheet -> " . join( ", ", @{ $o_sheet_dep_l{$sheet} } ) . "\n";
     }
@@ -5453,7 +5898,7 @@ additional information
 
   # $sheet : $table_l
   elsif( ( $cmd eq "o" || $cmd eq "i" ) && $topic eq "st" ) {
-    for my $sheet ( @o_sheet_a ) {
+    for my $sheet ( @o_sheet_va ) {
       my $table_l = join( ", ", @{ $i_sheet_table_a{$sheet} } );
       print $fh "$sheet : $table_l\n";
     }
@@ -5464,9 +5909,9 @@ additional information
 
   # $sheet $table : $col, ... (key worksheet or computed columns)
   elsif( $cmd eq "i" && $topic eq "sk" ) {
-    my $w_max = 0;
+    my @w = ( 0 );
     for my $round ( 0, 1 ) {
-    for my $sheet ( @o_sheet_a ) {
+    for my $sheet ( @o_sheet_va ) {
     for my $table_s ( @{ $i_sheet_sh{$sheet} } ) {
       my( $table, $unique, $field_sa ) = @$table_s;
       next if $i_key_unique && ! $unique;
@@ -5502,10 +5947,9 @@ additional information
 
       # }}}
       if( $round == 0 ) {
-        my $w = length( $table );
-        $w_max = $w if $w_max < $w;
+        my $w0 = length( $table ); $w[0] = $w0 if $w[0] < $w0;
       } else {
-        printf $fh "%s %-$w_max" . "s : %s\n", $sheet, $table, join( ", ", @col_a );
+        printf $fh "%s %-$w[0]s : %s\n", $sheet, $table, join( ", ", @col_a );
       }
     } } }
   }
@@ -5515,9 +5959,9 @@ additional information
 
   # $sheet $table : $col, ... (key or discriminator columns)
   elsif( $cmd eq "i" && $topic eq "sp" ) {
-    my $w_max = 0;
+    my @w = ( 0 );
     for my $round ( 0, 1 ) {
-    for my $sheet ( @o_sheet_a ) {
+    for my $sheet ( @o_sheet_va ) {
     for my $table_s ( @{ $i_sheet_sh{$sheet} } ) {
       my( $table, $unique, $field_sa ) = @$table_s;
       # {{{ @col_a
@@ -5552,10 +5996,9 @@ additional information
 
       # }}}
       if( $round == 0 ) {
-        my $w = length( $table );
-        $w_max = $w if $w_max < $w;
+        my $w0 = length( $table ); $w[0] = $w0 if $w[0] < $w0;
       } else {
-        printf $fh "%s %-$w_max" . "s : %s\n", $sheet, $table, join( ", ", @col_a );
+        printf $fh "%s %-$w[0]s : %s\n", $sheet, $table, join( ", ", @col_a );
       }
     } } }
   }
@@ -5565,9 +6008,9 @@ additional information
 
   # $sheet $table : $col, ... (defined columns)
   elsif( $cmd eq "i" && $topic eq "sq" ) {
-    my $w_max = 0;
+    my @w = ( 0 );
     for my $round ( 0, 1 ) {
-    for my $sheet ( @o_sheet_a ) {
+    for my $sheet ( @o_sheet_va ) {
     for my $table_s ( @{ $i_sheet_sh{$sheet} } ) {
       my( $table, $unique, $field_sa ) = @$table_s;
       # {{{ @col_a
@@ -5598,10 +6041,9 @@ additional information
 
       # }}}
       if( $round == 0 ) {
-        my $w = length( $table );
-        $w_max = $w if $w_max < $w;
+        my $w0 = length( $table ); $w[0] = $w0 if $w[0] < $w0;
       } else {
-        printf $fh "%s %-$w_max" . "s : %s\n", $sheet, $table, join( ", ", @col_a );
+        printf $fh "%s %-$w[0]s : %s\n", $sheet, $table, join( ", ", @col_a );
       }
     } } }
   }
@@ -5611,9 +6053,9 @@ additional information
 
   # $sheet $table : $col, ... (default columns)
   elsif( $cmd eq "i" && $topic eq "so" ) {
-    my $w_max = 0;
+    my @w = ( 0 );
     for my $round ( 0, 1 ) {
-    for my $sheet ( @o_sheet_a ) {
+    for my $sheet ( @o_sheet_va ) {
     for my $table_s ( @{ $i_sheet_sh{$sheet} } ) {
       my( $table, $unique, $field_sa ) = @$table_s;
       # {{{ @col_a
@@ -5655,10 +6097,9 @@ additional information
 
       # }}}
       if( $round == 0 ) {
-        my $w = length( $table );
-        $w_max = $w if $w_max < $w;
+        my $w0 = length( $table ); $w[0] = $w0 if $w[0] < $w0;
       } else {
-        printf $fh "%s %-$w_max" . "s : %s\n", $sheet, $table, join( ", ", @col_a );
+        printf $fh "%s %-$w[0]s : %s\n", $sheet, $table, join( ", ", @col_a );
       }
     } } }
   }
@@ -5668,9 +6109,9 @@ additional information
 
   # $sheet $table : $col, ... (required columns)
   elsif( $cmd eq "i" && $topic eq "sr" ) {
-    my $w_max = 0;
+    my @w = ( 0 );
     for my $round ( 0, 1 ) {
-    for my $sheet ( @o_sheet_a ) {
+    for my $sheet ( @o_sheet_va ) {
     for my $table_s ( @{ $i_sheet_sh{$sheet} } ) {
       my( $table, $unique, $field_sa ) = @$table_s;
       # {{{ @col_a
@@ -5691,10 +6132,9 @@ additional information
 
       # }}}
       if( $round == 0 ) {
-        my $w = length( $table );
-        $w_max = $w if $w_max < $w;
+        my $w0 = length( $table ); $w[0] = $w0 if $w[0] < $w0;
       } else {
-        printf $fh "%s %-$w_max" . "s : %s\n", $sheet, $table, join( ", ", @col_a );
+        printf $fh "%s %-$w[0]s : %s\n", $sheet, $table, join( ", ", @col_a );
       }
     } } }
   }
@@ -5704,16 +6144,15 @@ additional information
 
   # $sheet $table : $field, ... (rowid fields)
   elsif( $cmd eq "i" && $topic eq "ri" ) {
-    my $w_max = 0;
-    for my $round ( 0, 1 ) { for my $sheet ( @i_req_a ) {
+    my @w = ( 0 );
+    for my $round ( 0, 1 ) { for my $sheet ( @i_req_va ) {
       my $table_s = $i_req_sh{$sheet};
       my( $map, $table, $field_sa ) = @$table_s;
       my @field_a = map { $_->[1] } grep { $_->[0] == 0 } @$field_sa;
       if( $round == 0 ) {
-        my $w = length( $table );
-        $w_max = $w if $w_max < $w;
+        my $w0 = length( $table ); $w[0] = $w0 if $w[0] < $w0;
       } else {
-        printf $fh "%s %-$w_max" . "s : %s\n", $sheet, $table, join( ", ", @field_a );
+        printf $fh "%s %-$w[0]s : %s\n", $sheet, $table, join( ", ", @field_a );
       }
     } }
   }
@@ -5723,16 +6162,15 @@ additional information
 
   # $sheet $table : $field, ... (key fields)
   elsif( $cmd eq "i" && $topic eq "rk" ) {
-    my $w_max = 0;
-    for my $round ( 0, 1 ) { for my $sheet ( @i_req_a ) {
+    my @w = ( 0 );
+    for my $round ( 0, 1 ) { for my $sheet ( @i_req_va ) {
       my $table_s = $i_req_sh{$sheet};
       my( $map, $table, $field_sa ) = @$table_s;
       my @field_a = map { $_->[1] } grep { $_->[0] == 1 } @$field_sa;
       if( $round == 0 ) {
-        my $w = length( $table );
-        $w_max = $w if $w_max < $w;
+        my $w0 = length( $table ); $w[0] = $w0 if $w[0] < $w0;
       } else {
-        printf $fh "%s %-$w_max" . "s : %s\n", $sheet, $table, join( ", ", @field_a );
+        printf $fh "%s %-$w[0]s : %s\n", $sheet, $table, join( ", ", @field_a );
       }
     } }
   }
@@ -5742,15 +6180,14 @@ additional information
 
   # $table : $sheet_l
   elsif( ( $cmd eq "o" || $cmd eq "i" ) && $topic eq "ts" ) {
-    my $w_max = 0;
+    my @w = ( 0 );
     for my $round ( 0, 1 ) {
-    for my $table ( @i_table_a ) {
+    for my $table ( @i_table_va ) {
       if( $round == 0 ) {
-        my $w = length( $table );
-        $w_max = $w if $w_max < $w;
+        my $w0 = length( $table ); $w[0] = $w0 if $w[0] < $w0;
       } else {
         my $sheet_a = $i_table_sheet_a{$table};
-        printf $fh "%-$w_max" . "s : %s%s\n", $table, join( ", ", @$sheet_a );
+        printf $fh "%-$w[0]s : %s%s\n", $table, join( ", ", @$sheet_a );
       }
     } }
   }
@@ -5760,14 +6197,13 @@ additional information
 
   # $table : $rowid
   elsif( $cmd eq "i" && $topic eq "ti" ) {
-    my $w_max = 0;
-    for my $round ( 0, 1 ) { for my $table ( @i_table_a ) {
+    my @w = ( 0 );
+    for my $round ( 0, 1 ) { for my $table ( @i_table_va ) {
       my( $unique, $rowid, undef ) = @{ $i_table_sh{$table} };
       if( $round == 0 ) {
-        my $w = length( $table );
-        $w_max = $w if $w_max < $w;
+        my $w0 = length( $table ); $w[0] = $w0 if $w[0] < $w0;
       } else {
-        printf $fh "%-$w_max" . "s : %s\n", $table, $rowid ;
+        printf $fh "%-$w[0]s : %s\n", $table, $rowid ;
       }
     } }
   }
@@ -5777,16 +6213,15 @@ additional information
 
   # $table : (unique) $key_l
   elsif( $cmd eq "i" && $topic eq "tk" ) {
-    my $w_max = 0;
-    for my $round ( 0, 1 ) { for my $table ( @i_table_a ) {
+    my @w = ( 0 );
+    for my $round ( 0, 1 ) { for my $table ( @i_table_va ) {
       my( $unique, undef, $key_a ) = @{ $i_table_sh{$table} };
       next unless ( ! $i_key_unique || $unique ) && @$key_a;
       if( $round == 0 ) {
-        my $w = length( $table );
-        $w_max = $w if $w_max < $w;
+        my $w0 = length( $table ); $w[0] = $w0 if $w[0] < $w0;
       } else {
         my $sep = $unique ? ":-" : ":=";
-        printf $fh "%-$w_max" . "s %s %s\n", $table, $sep, join( ", ", @$key_a );
+        printf $fh "%-$w[0]s %s %s\n", $table, $sep, join( ", ", @$key_a );
       }
     } }
   }
@@ -5811,9 +6246,32 @@ $cmd_flag
 'usage : '. $prog_file .' $m_file.mmb -p [$cmd_flag]*
 
 $cmd_flag
-  -sl $s+ : ($s = ['. $p_sheet_l .']) print key fields in selected worksheets
-            ($s+ is a list of worksheet codes without separator)
-  -sa     : alias for all worksheets
+  -sl $s+ : ($s = ['. $p_sheet_vl .']) print key fields in selected worksheets
+            ($s+ is a non-separated list of worksheet codes)
+  -sa     : alias for all worksheets except info
+  -cf $y  : print cash flow per financial year
+  -cy $y  : print cash flow per calendar year
+            $y = $y1      : single (".": current) year
+            $y = $y1..$y2 : from $y1 ("": first) to $y2 ("": current)
+  -cm $m  : print cash flow per month
+            $m = $m1        : single (".": current) month in current year
+            $m = $y1-$m1    : single month in year $y1 (".": current)
+            $m = $ym1..$m2  : from $ym1 to $m2 in current year
+            $m = $ym1..$ym2 : from $ym1 ("": first) to $ym2 ("": current)
+            $ym1 = $y1-$m1  : month $m1 ("": 1)  in year $y1 (".": current)
+            $ym2 = $y2-$m2  : month $m2 ("": 12) in year $y2 ("": current)
+  -ct $t+ : ($t = ['. $p_cash_type_vl .']) cash flow account types (default: all)
+            ($t+ is a non-separated list of account type codes)
+            w : Cash (wallet)
+            b : Checking (bank account)
+            c : Credit Card
+            l : Loan
+            t : Term
+            a : Asset
+            s : Shares
+  -cu $u+ : cash flow currencies (default: ".,..")
+            $u: currency symbol (".": base currency, "..": all currencies)
+            ($u+ is a comma separated list of currency symbols)
 ';
   }
 
@@ -5944,7 +6402,7 @@ sub proc {
       x_log_args();
       my $ku = $i_key_unique ? "TRUE" : "FALSE";
       my @su = grep { exists $i_sheet_u{$_} } @x_sheet_a;
-      my @sr = grep { exists $i_sheet_r{$_} } @o_sheet_a;
+      my @sr = grep { exists $i_sheet_r{$_} } @o_sheet_va;
       log_debugf( ": i_key_unique=$ku\n" );
       log_debugf( ": i_sheet_u=" . join( "", @su ) . "\n" );
       log_debugf( ": i_sheet_r=" . join( "", @sr ) . "\n" );
@@ -6037,7 +6495,71 @@ sub proc {
 
   if( $cmd eq "p" ) {
     m_open( 0 );
-    p_sheet_key();
+    # {{{ keys
+
+    if( @p_sheet_a > 0 ) {
+      p_sheet_key();
+    }
+
+    # }}}
+    # {{{ account
+
+    if( $p_as ) {
+      p_account_stmtdate();
+    }
+
+    # }}}
+    # {{{ cash flow
+
+    if( defined $p_cash_p ) {
+
+      if( keys %p_cash_th == 0 ) {
+        # default: all account types
+        for my $t ( split( //, $p_cash_type_vl ) ) {
+          my $t_name = $p_cash_type_vh{$t};
+          $p_cash_th{$t_name} = 1;
+        }
+      }
+
+      if( @p_cash_ua == 0 && ! $p_cash_uo ) {
+        # default: base currency, other currencies
+        push( @p_cash_ua, "." );
+        $p_cash_uh{"."} = 1;
+        $p_cash_uo = 1;
+      }
+
+      if( exists $p_cash_uh{"."} ) {
+        # {{{ $base_u
+
+        my $base_u;
+
+        my @row = $m_db->selectrow_array(
+          "select u.CURRENCY_SYMBOL" .
+          "\nfrom INFOTABLE_V1 i, CURRENCYFORMATS_V1 u" .
+          "\nwhere i.INFONAME = 'BASECURRENCYID' and i.INFOVALUE = u.CURRENCYID"
+        );
+        if( @row == 1 ) {
+          $base_u = $row[0];
+        } else {
+          log_warn( "cannot find base currency\n" );
+        }
+
+        # }}}
+        my @cash_ua = @p_cash_ua;
+        @p_cash_ua = ();
+        %p_cash_uh = ();
+        for my $u ( @cash_ua ) {
+          $u = $base_u if $u eq ".";
+          next if ! defined $u || exists $p_cash_uh{$u};
+          push( @p_cash_ua, $u );
+          $p_cash_uh{$u} = 1;
+        }
+      }
+
+      p_cash_flow();
+    }
+
+    # }}}
   }
 
   # }}}
@@ -6195,7 +6717,7 @@ sub proc {
 
     elsif( ( $cmd eq "o" || $cmd eq "i" ) && $_ =~ /^-n(.)$/ ) {
       my $sheet = $1;
-      if( ! exists $o_sheet_p{$sheet} ) {
+      if( ! exists $o_sheet_vh{$sheet} ) {
         log_fatal( "unknown worksheet [$sheet]\n" );
         $error = 1; last ARG;
       }
@@ -6232,7 +6754,7 @@ sub proc {
       usage(1) if @ARGV == 0;
       my $sheet_l = shift;
       for my $sheet ( split( //, $sheet_l ) ) {
-        if( ! exists $o_sheet_p{$sheet} ) {
+        if( ! exists $o_sheet_vh{$sheet} ) {
           log_fatal( "unknown worksheet -sl [$sheet]\n" );
           $error = 1; last ARG;
         }
@@ -6256,7 +6778,7 @@ sub proc {
       my $sheet_l = shift;
       my @sheet_a = ();
       for my $sheet ( split( //, $sheet_l ) ) {
-        if( ! exists $o_sheet_p{$sheet} ) {
+        if( ! exists $o_sheet_vh{$sheet} ) {
           log_fatal( "unknown worksheet -sd [$sheet]\n" );
           $error = 1; last ARG;
         }
@@ -6298,7 +6820,7 @@ sub proc {
     # {{{ -i    -ua
 
     elsif( $cmd eq "i" && $_ eq "-ua" ) {
-      for my $sheet ( @o_sheet_a ) {
+      for my $sheet ( @o_sheet_va ) {
         next if $sheet eq "i";
         $i_sheet_u{$sheet} = 1;
       }
@@ -6306,7 +6828,7 @@ sub proc {
 
     # undocumented flag
     elsif( ( $cmd eq "i" ) && $_ eq "-uA" ) {
-      for my $sheet ( @o_sheet_a ) {
+      for my $sheet ( @o_sheet_va ) {
         $i_sheet_u{$sheet} = 1;
       }
     }
@@ -6318,7 +6840,7 @@ sub proc {
       usage(1) if @ARGV == 0;
       my $sheet_l = shift;
       for my $sheet ( split( //, $sheet_l ) ) {
-        if( ! exists $o_sheet_p{$sheet} ) {
+        if( ! exists $o_sheet_vh{$sheet} ) {
           log_fatal( "unknown worksheet -ul [$sheet]\n" );
           $error = 1; last ARG;
         }
@@ -6330,7 +6852,7 @@ sub proc {
     # {{{ -i    -ra
 
     elsif( $cmd eq "i" && $_ eq "-ra" ) {
-      for my $sheet ( @i_req_a ) {
+      for my $sheet ( @i_req_va ) {
         $i_sheet_r{$sheet} = 1;
       }
     }
@@ -6396,13 +6918,24 @@ sub proc {
 
       @p_sheet_a = ();
       %p_sheet_h = ();
+
+      $p_as = 0;
+
+      $p_cash_p  = undef;
+      $p_cash_p1 = undef;
+      $p_cash_p2 = undef;
+      %p_cash_th = ();
+      @p_cash_ua = ();
+      %p_cash_uh = ();
+      $p_cash_uo = 0;
     }
 
     # }}}
     # {{{ -p -sa
 
-    elsif( $cmd eq "p" && $_ eq "-sa" ) {
-      for my $sheet ( @o_sheet_a ) {
+    elsif( $cmd eq "p" && $_ =~ /^-s([aA])$/ ) {
+      for my $sheet ( @o_sheet_va ) {
+        next if $sheet eq "i" && $1 eq "a";
         next unless exists $p_sheet_sh{$sheet};
         if( exists $p_sheet_h{$sheet} ) {
           if( $warn_level >= 1 ) {
@@ -6436,6 +6969,187 @@ sub proc {
           $p_sheet_h{$sheet} = 1;
         }
       }
+    }
+
+    # }}}
+    # {{{ -p -as
+
+    elsif( $cmd eq "p" && $_ eq "-as" ) {
+      $p_as = 1;
+    }
+
+    # }}}
+    # {{{ -p -c[fy] $y
+
+    elsif( $cmd eq "p" && $_ =~ /^-c([fy])$/ ) {
+      usage(1) if @ARGV == 0;
+      if( defined $p_cash_p ) {
+        log_fatal( "cash flow period is already defined\n" );
+        $error = 1; last ARG;
+      }
+      $p_cash_p = $1;
+      my $y = shift;
+      my( undef, undef, undef, undef, $mon, $year, undef, undef, undef ) = gmtime();
+      my $y_cur = $year + 1900;
+
+      my( $y1, $y2 );
+      if( $y eq "." ) {
+        $y1 = $y_cur;
+      } elsif( $y =~ /^(\d+)$/ ) {
+        $y1 = $1;
+      } elsif( $y =~ /^(\d*)\.\.(\d*)$/ ) {
+        $y1 = $1;
+        $y2 = $2 eq "" ? $y_cur : $2;
+      } else {
+        log_fatal( "invalid cash flow period [$y]\n" );
+        $error = 1; last ARG;
+      }
+
+      $y2 = $y1 unless defined $y2;
+      if( $y2 eq "" ) {
+        log_checkf( ": y2 is empty\n" );
+        $error = 1; last ARG;
+      }
+
+      $p_cash_p1 = sprintf( "%04d", $y1 + 0 ) if $y1 ne "";
+      $p_cash_p2 = sprintf( "%04d", $y2 + 0 );
+    }
+
+    # }}}
+    # {{{ -p -cm $m
+
+    elsif( $cmd eq "p" && $_ eq "-cm" ) {
+      usage(1) if @ARGV == 0;
+      if( defined $p_cash_p ) {
+        log_fatal( "cash flow period is already defined\n" );
+        $error = 1; last ARG;
+      }
+      $p_cash_p = "m";
+      my $m = shift;
+      my( undef, undef, undef, undef, $mon, $year, undef, undef, undef ) = gmtime();
+      my( $y_cur, $m_cur ) = ( $year + 1900, $mon + 1 );
+
+      my( $y1, $m1, $y2, $m2 );
+      if( $m eq "." ) {
+        ( $y1, $m1 ) = ( $y_cur, $m_cur );
+      } elsif( $m =~ /^(\d+)$/ ) {
+        ( $y1, $m1 ) = ( $y_cur, $1 );
+      } elsif( $m =~ /^\.-(\d+)$/ ) {
+        ( $y1, $m1 ) = ( $y_cur, $1 );
+      } elsif( $m =~ /^(\d+)-(\d+)$/ ) {
+        ( $y1, $m1 ) = ( $1, $2 );
+      }
+
+      elsif( $m eq ".." ) {
+        ( $y2, $m2 ) = ( $y_cur, $m_cur );
+      } elsif( $m =~ /^\.\.(\d*)-(\d*)$/ ) {
+        $y2 = $1 eq "" ? $y_cur : $1;
+        $m2 = $2 eq "" ? 12 : $2;
+      }
+
+      elsif( $m =~ /^\.-(\d*)\.\.$/ ) {
+        ( $y1, $m1 ) = ( $y_cur, ( $1 eq "" ? 1 : $1 ) );
+        ( $y2, $m2 ) = ( $y_cur, $m_cur );
+      } elsif( $m =~ /^\.-(\d*)\.\.(\d+)$/ ) {
+        ( $y1, $m1 ) = ( $y_cur, ( $1 eq "" ? 1 : $1 ) );
+        ( $y2, $m2 ) = ( $y_cur, $2 );
+      } elsif( $m =~ /^\.-(\d*)\.\.(\d*)-(\d*)$/ ) {
+        ( $y1, $m1 ) = ( $y_cur, ( $1 eq "" ? 1 : $1 ) );
+        $y2 = $2 eq "" ? $y_cur : $2;
+        $m2 = $3 eq "" ? 12 : $3;
+      }
+
+      elsif( $m =~ /^(\d+)-(\d*)\.\.$/ ) {
+        ( $y1, $m1 ) = ( $1, ( $2 eq "" ? 1 : $2 ) );
+        ( $y2, $m2 ) = ( $y_cur, $m_cur );
+      } elsif( $m =~ /^(\d+)-(\d*)\.\.(\d+)$/ ) {
+        ( $y1, $m1 ) = ( $1, ( $2 eq "" ? 1 : $2 ) );
+        ( $y2, $m2 ) = ( $y_cur, $3 );
+      } elsif( $m =~ /^(\d+)-(\d*)\.\.(\d*)-(\d*)$/ ) {
+        ( $y1, $m1 ) = ( $1, ( $2 eq "" ? 1 : $2 ) );
+        $y2 = $3 eq "" ? $y_cur : $3;
+        $m2 = $4 eq "" ? 12 : $4;
+      }
+
+      else {
+        log_fatal( "invalid cash flow period [$m]\n" );
+        $error = 1; last ARG;
+      }
+
+      ( $y2, $m2 ) = ( $y1, $m1 ) unless defined $y2;
+      if( $y2 eq "" || $m2 eq "" ) {
+        log_checkf( ": y2-m2 is empty\n" );
+        $error = 1; last ARG;
+      }
+      if( $y1 eq "" && $m1 ne "" ) {
+        log_checkf( ": y1 is empty and m1 is not empty\n" );
+        $error = 1; last ARG;
+      }
+      if( $y1 ne "" && $m1 eq "" ) {
+        log_checkf( ": y1 is not empty and m1 is empty\n" );
+        $error = 1; last ARG;
+      }
+
+      unless( $m1 eq "" || ( $m1 >= 1 && $m1 <= 12 ) ) {
+        log_fatal( "invalid month in [$m]\n" );
+        $error = 1; last ARG;
+      }
+      unless( $m2 >= 1 && $m2 <= 12 ) {
+        log_fatal( "invalid month in [$m]\n" );
+        $error = 1; last ARG;
+      }
+
+      $p_cash_p1 = sprintf( "%04d-%02d", $y1 + 0, $m1 + 0 ) if $y1 ne "";
+      $p_cash_p2 = sprintf( "%04d-%02d", $y2 + 0, $m2 + 0 );
+    }
+
+    # }}}
+    # {{{ -p -ct $t_l
+
+    elsif( $cmd eq "p" && $_ eq "-ct" ) {
+      usage(1) if @ARGV == 0;
+      my $t_l = shift;
+      for my $t ( split( //, $t_l ) ) {
+        if( ! exists $p_cash_type_vh{$t} ) {
+          log_fatal( "unknown account type -ct [$t]\n" );
+          $error = 1; last ARG;
+        }
+        my $t_name = $p_cash_type_vh{$t};
+        if( exists $p_cash_th{$t_name} ) {
+          if( $warn_level >= 1 ) {
+            log_warn( "account type [$t] is already selected\n" );
+          }
+        } else {
+          $p_cash_th{$t_name} = 1;
+        }
+      }
+    }
+
+    # }}}
+    # {{{ -p -cu $u_l
+
+    elsif( $cmd eq "p" && $_ eq "-cu" ) {
+      usage(1) if @ARGV == 0;
+      my $u_l = shift;
+
+      if( $p_cash_uo ) {
+        if( $warn_level >= 1 ) {
+          log_warn( "ignoring currecncies [$u_l] after ..\n" );
+        }
+      }
+
+      else { for my $u ( split( ",", $u_l ) ) {
+        if( $u eq ".." ) { $p_cash_uo = 1; last; }
+        $u = uc( $u );
+        if( exists $p_cash_uh{$u} ) {
+          if( $warn_level >= 1 ) {
+            log_warn( "currency [$u] is already selected\n" );
+          }
+        } else {
+          push( @p_cash_ua, $u );
+          $p_cash_uh{$u} = 1;
+        }
+      } }
     }
 
     # }}}

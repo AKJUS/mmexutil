@@ -5,6 +5,7 @@ Utilities for [Money Manager Ex (MMEX)](https://moneymanagerex.org) database
 
 - Export to XLSX file
 - Import from XLSX file
+- Print reports
 
 ## Installation
 
@@ -87,6 +88,36 @@ An export to an XLSX file followed by an import into the same MMEX file,
 would duplicate all transactions and all scheduled transactions,
 unless their import is disabled, or they are removed in either the MMEX
 or the XLSX file before import.
+
+Show usage of print command:
+  ```
+  mmexutil -p -h
+  ```
+
+Print all keys in `test.mmb` (currencies, accounts, categories, payees, etc.):
+  ```
+  mmexutil test.mmb -p -sa
+  ```
+
+Print payees in `test.mmb`:
+  ```
+  mmexutil test.mmb -p -sl p
+  ```
+
+Print cash flow per calendar year in `test.mmb` (all years):
+  ```
+  mmexutil test.mmb -p -cy ..
+  ```
+
+Print cash flow per month in `test.mmb` (all months in current year):
+  ```
+  mmexutil test.mmb -p -cm .-1..12
+  ```
+
+The cash flow contains the sum of transactions (in the past)
+and scheduled transactions (in the future), grouped by currency.
+Money transfers in the same currency and within the set of selected
+account types (all types by default), are not shown in the sums.
 
 ## License
 
