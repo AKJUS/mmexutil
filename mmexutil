@@ -4589,7 +4589,7 @@ sub i_row_proc { my( $sheet, $row ) = @_;
           # {{{ "repeats"
 
           elsif( $op_name eq "repeats" ) {
-          if( @col_value == 2 && $col_ne && $type eq "integer" ) {
+          if( @col_value == 2 && $type eq "integer" ) {
             my( $key_auto, $key_freq ) = ( $col_value[0], $col_value[1] );
 
             my $id_auto = m_map_key_id( "REPEATS_AUTO", $key_auto );
