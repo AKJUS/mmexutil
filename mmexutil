@@ -5303,7 +5303,7 @@ sub p_account_stmtdate {
 }
 
 # }}}
-# {{{ . sub p_cash_flow()
+# {{{ sub p_cash_flow()
 # print cash flow
 
 sub p_cash_flow {
@@ -5486,6 +5486,14 @@ sub p_cash_flow {
 
     # }}}
     my $freq; { use integer; $freq = $repeats % 100; }
+    # {{{ check $num
+
+    next unless
+      $freq == 0 ||
+      ( $freq > 0 && $freq <= 16 ) && $num > 0 ||
+      ( $freq > 0 && $freq < 13 || $freq > 14 && $freq <= 16 ) && $num == -1;
+
+    # }}}
     #log_debug( "r [$date], [$freq], [$num], [$cur], [$scale], [$w_t], [$w_a], [$d_t], [$d_a]\n" );
     while( 1 ) {
       last if $date ge $date2;
@@ -5526,7 +5534,7 @@ sub p_cash_flow {
       }
       $num-- if $num > 0 && ( $freq < 11 || $freq > 14 );
       last if $freq == 0 || $num == 0;
-      last if $num == -1 && ( $freq == 11 || $freq == 12 );
+      last if ( $freq >= 11 && $freq <= 12 ) && $num == -1;
       # {{{ $date
 
       if( $date =~ /^(\d+)-(\d+)-(\d+)/ ) {
@@ -5606,7 +5614,7 @@ sub p_cash_flow {
       }
 
       # }}}
-      $num = -1 if $freq == 11 || $freq == 12;
+      $num = -1 if $freq >= 11 && $freq <= 12;
     }
   }
 
