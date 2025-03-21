@@ -429,7 +429,7 @@ use Spreadsheet::ParseXLSX 0.35 qw();
 # in front of the version date (see the note "program version" above).
 
 my $prog_name    = "mmexutil";
-my $prog_version = "n1.0.0 (n2024-07-21)";
+my $prog_version = "n1.0.0 (n2025-03-21)";
 
 # }}}
 # {{{ var
@@ -5518,7 +5518,7 @@ sub p_cash_flow {
         }
 
         # }}}
-        #log_debug( "r [$per], [$cur], [$scale], [$w_t], [$w_a], [$d_t], [$d_a]\n" );
+        #log_debug( "r [$per], [$date], [$cur], [$scale], [$w_t], [$w_a], [$d_t], [$d_a]\n" );
         # {{{ $per_sh{$per}->{$cur}
 
         $per_sh{$per} = {} unless exists $per_sh{$per};
@@ -5600,13 +5600,14 @@ sub p_cash_flow {
             $day += $delta_day;
             last;
           }
-          $delta_day -= $mon_days - $day - 1;
+          $delta_day -= $mon_days - $day + 1;
           $day = 1;
           $mon++;
           if( $mon > 12 ) { $year++; $mon = 1; }
         }
 
         $date = sprintf( "%04d-%02d-%02d", $year, $mon, $day );
+        #log_debug( "r [$date]\n" );
       }
 
       else {
