@@ -6409,10 +6409,10 @@ sub version { my( $f ) = @_;
   print STDOUT "$prog_name $prog_version\n";
   if( $f eq "" || $f eq "ersion" ) {
   } elsif( $f eq "c" ) {
-    print STDOUT "  compatible with MMEX $m_mmex_version, DATAVERSION $m_data_version, user_version $m_user_version\n";
-    print STDOUT "  compatible with Excel .xlsx (XML-based) file format\n";
+    print STDOUT "compatible with MMEX $m_mmex_version, DATAVERSION $m_data_version, user_version $m_user_version\n";
+    print STDOUT "compatible with Excel .xlsx (XML-based) file format\n";
   } else {
-    print STDOUT "  unknown version flag [-v$f]\n";
+    print STDOUT "unknown version flag [-v$f]\n";
   }
   m_close(0); exit(0);
 }
