@@ -437,7 +437,7 @@ use Spreadsheet::ParseXLSX 0.35 qw();
 # in front of the version date (see the note "program version" above).
 
 my $prog_name    = "mmexutil";
-my $prog_version = "1.1.0 (2025-03-22)";
+my $prog_version = "n1.1.0 (2025-03-22)";
 
 # }}}
 # {{{ var
@@ -984,15 +984,21 @@ my $m_mmex_version = "1.9.0 (2025-02-07)";  # MMEX version
 my $m_data_version = "3";                   # found in INFOTABLE where INFONAME=DATAVERSION
 my $m_user_version = 20;                    # (int) found in PAGMA user_version
 
-# {{{ rowid column of database tables
+# {{{ list of database tables and their primary key
 
-# @m_table_fid_sa : ( [ $table, $fid ] )
+# @m_table_pk_sa : ( [ $table, $pk ] )
 
 # $table : (string) table name
-# $fid   : (string) rowid field
+# $pk    : (string) primary key
+
+# note: this table (except for the order) can be obtained from the database with
+# select t.name, c.name
+# from pragma_table_list as t, pragma_table_info(t.name) as c
+# where t.schema='main' and t.type='table' and t.name not like 'sqlite_%' and c.pk
+# order by 1;
 
 # }}}
-my @m_table_fid_sa = (
+my @m_table_pk_sa = (
     [ "INFOTABLE_V1",               "INFOID" ],
     [ "CURRENCYFORMATS_V1",         "CURRENCYID" ],
     [ "CURRENCYHISTORY_V1",         "CURRHISTID" ],
@@ -1019,12 +1025,12 @@ my @m_table_fid_sa = (
 );
 # {{{ indexes
 
-my @m_table_va = ();   # ( $table, ... )
-my %m_table_fid = ();  # ( $table => $fid )
+my @m_table_va = ();  # ( $table, ... )
+my %m_table_pk = ();  # ( $table => $pk )
 
-for( @m_table_fid_sa ) { my( $table, $fid ) = @$_;
+for( @m_table_pk_sa ) { my( $table, $pk ) = @$_;
   push( @m_table_va, $table );
-  $m_table_fid{$table} = $fid;
+  $m_table_pk{$table} = $pk;
 }
 
 # }}}
@@ -1035,14 +1041,13 @@ for( @m_table_fid_sa ) { my( $table, $fid ) = @$_;
 
 # $map     : (string) name of map between id and key
 # @map_s   : one of:
-#            ( 0: "table", 1: $collate, 2: $table, 3: $id, 4: $key_l, 5? $query )
+#            ( 0: "table", 1: $collate, 2: $table, 3: $key_l, 4? $query )
 #            ( 0: "const", 1: $collate, 2: \%id_key )
 #            ( 0: "union", 1: [ $map, ... ] )
 # $collate : undef or sub( $key ) -> $normalized_key
 # $table   : (string) table name in MMEX database
-# $id      : (string) rowid name in MMEX table
 # $key_l   : (string) comma separated list of key names in MMEX table
-# $query   : (string) database query (default: select $id, $key_l from $table)
+# $query   : (string) database query (default: select <pk>, $key_l from $table)
 # %id_key  : ( $id => $key ) constant map from id to key
 
 # %m_map_sh specifies the cache of MMEX database maps between id (rowid) and key name.
@@ -1110,14 +1115,14 @@ my %m_map_sh = (
   # {{{ CURRENCY
 
   CURRENCY => [ "table", sub { uc($_[0]) },
-    "CURRENCYFORMATS_V1", "CURRENCYID", "CURRENCY_SYMBOL"
+    "CURRENCYFORMATS_V1", "CURRENCY_SYMBOL"
   ],
 
   # }}}
   # {{{ ACCOUNT
 
   ACCOUNT => [ "table", sub { uc($_[0]) },
-    "ACCOUNTLIST_V1", "ACCOUNTID", "ACCOUNTNAME"
+    "ACCOUNTLIST_V1", "ACCOUNTNAME"
   ],
 
   # }}}
@@ -1140,7 +1145,7 @@ my %m_map_sh = (
   # {{{ CATEGORY
 
   CATEGORY => [ "table", sub { uc($_[0]) },
-    "CATEGORY_V1", "CATEGID", "PARENTID, CATEGNAME",
+    "CATEGORY_V1", "PARENTID, CATEGNAME",
     "with recursive CATEGORY_PATH as (" .
       "\n  select CATEGID, CATEGNAME as CATEGPATH" .
       "\n  from CATEGORY_V1 where PARENTID = '-1'" .
@@ -1155,21 +1160,21 @@ my %m_map_sh = (
   # {{{ PAYEE
 
   PAYEE => [ "table", sub { uc($_[0]) },
-    "PAYEE_V1", "PAYEEID", "PAYEENAME"
+    "PAYEE_V1", "PAYEENAME"
   ],
 
   # }}}
   # {{{ TAG
 
   TAG => [ "table", sub { uc($_[0]) },
-    "TAG_V1", "TAGID", "TAGNAME"
+    "TAG_V1", "TAGNAME"
   ],
 
   # }}}
   # {{{ YEAR
 
   YEAR => [ "table", undef,
-    "BUDGETYEAR_V1", "BUDGETYEARID", "BUDGETYEARNAME"
+    "BUDGETYEAR_V1", "BUDGETYEARNAME"
   ],
 
   # }}}
@@ -1537,8 +1542,9 @@ sub m_id_init {
   # {{{ $m_last_tm: max UNIX timestamp in milliseconds
 
   $m_last_tm = 0;
-  for( @m_table_fid_sa ) { my( $table, $fid ) = @$_;
-    my $query = "select max($fid) from $table";
+  for my $table ( @m_table_va ) {
+    my $pk = $m_table_pk{$table};
+    my $query = "select max($pk) from $table";
     my $sth = m_prepare( $query );
     $sth->execute(); while( my @row = $sth->fetchrow_array() ) {
       my $id = $row[0];
@@ -1571,7 +1577,9 @@ sub m_id_init {
     log_warn( "m_last_tm=$m_last_tm is more than 10 seconds in the future\n" );
   }
 
-  #log_debug( "m_last_tm=$m_last_tm\n" );
+  if( $info_level >= 2 ) {
+    log_info( "m_last_tm=$m_last_tm\n" );
+  }
 }
 
 # }}}
@@ -1666,15 +1674,19 @@ sub m_map_id_key { my( $map, $id ) = @_;
     # {{{ if $type eq "table"
 
     if( $type eq "table" ) {
-      my $id_key = {};
-      my $query = defined $map_s->[5] ? $map_s->[5] :
-        "select $map_s->[3], $map_s->[4] from $map_s->[2]";
+      my( $collate, $query ) = @$map_s[1, 4];
+      if( ! defined $query ) {
+        my( $table, $key_l ) = @$map_s[2, 3];
+        my $pk = $m_table_pk{$table};
+        $query = "select $pk, $key_l from $table";
+      }
       my $sth = m_prepare( $query );
+      my $id_key = {};
       $sth->execute(); while( my @row = $sth->fetchrow_array() ) {
         $id_key->{ $row[0] } = $row[1];
       }
 
-      $cache_s = [ $type, $id_key, undef, $map_s->[1] ];
+      $cache_s = [ $type, $id_key, undef, $collate ];
 
       if( $info_level >= 2 ) {
         my $map_n = keys %$id_key;
@@ -2011,7 +2023,7 @@ sub m_execute_col1 { my( $sth, $field_a, $field_value ) = @_;
 
 # all MMEX database ids are translated from a numeric value to a key symbol or name.
 # XLSX columns containing numeric ids are disabled (not generated) by default; they can
-# be enabled with the -ci flag. the rowid (primary key) of the main table can be enebled
+# be enabled with the -ci flag. the primary key (rowid) of the main table can be enebled
 # with the -cp flag.
 
 # id columns, if present in an XLSX worksheet, are ignored by the input command of
@@ -3097,8 +3109,8 @@ my %o_class_flag = (
   # {{{ $flag => [ $class, ... ]
 
   a => [ 0, 1, 2 ],  # all
-  i => [ 0,    2 ],  # rowid and id
-  p => [ 0       ],  # rowid (primary id)
+  i => [ 0,    2 ],  # primary key and id
+  p => [ 0       ],  # primary key
   s => [    1    ],  # sort
 
   # }}}
@@ -3411,16 +3423,16 @@ sub o_ws_write { my( $sheet, $ws, $format_a ) = @_;
 # the input (-i) command imports data from an XLSX file into the MMEX database, by
 # (1) adding new records, (2) updating existing records, and (3) adding required records.
 # (2) and (3) can be performed only on tables with identifiable records, i.e., on tables
-# with a key, other than the rowid. database ids are abstracted; even if they are present
-# in the XLSX file (e.g., generated by -o -ci), they are ignored by the input command.
-# for tables without a key, all entries in XLSX file are added as new records, therefore
-# an export (-o) to an XLSX file followed by an import (-i) into the same MMEX file,
-# generates duplicate records in these tables. in order to avoid duplicates, it is
-# desirable that the database records can be identified without their rowid.
+# with a key other than the primary key (rowid). database ids present in the XLSX file
+# (e.g., generated by -o -ci), are ignored by the input command. for tables without a key,
+# all entries in XLSX file are added as new records, therefore an export (-o) to an
+# XLSX file followed by an import (-i) into the same MMEX file, generates duplicate
+# records in these tables. to avoid duplicates, it is desirable that the database records
+# can be identified without their rowid.
 
 # many MMEX tables have a unique key. for a few other tables, a key is assumed, although
 # it is not declared as unique in the database. the keys of each table can be listed
-# using the -i -htk flags (lines with ":-" or ":=" show unique or non-unique keys, resp.).
+# using the -i -htk flag (lines with ":-" or ":=" show unique or non-unique keys, resp.).
 # for all practical purposes, the user can easily adapt the data if needed, such that
 # all non-unique keys are in fact unique, i.e., different records have different keys.
 # if records with the same non-unique key are found, an error is printed and the import
@@ -3435,27 +3447,27 @@ sub o_ws_write { my( $sheet, $ws, $format_a ) = @_;
 # is disabled, or they are removed in either the MMEX or the XLSX file before import.
 
 # it would be nice if in a future version of MMEX, all database tables have a key other
-# than the rowid. an obvious key for CHECKINGACCOUNT_V1 would be TRANSDATE, containing
-# the transaction date and time; however, in the current MMEX implementation the time
-# is reset to zero, which makes TRANSDATE (and also its combination with other fields)
-# inappropriate as a unique key. the choice of a unique key for BILLSDEPOSITS_V1 is less
-# obvious; TRANSDATE is a rolling date and it is automatically updated, while the
+# than the primary key (rowid). an obvious key for CHECKINGACCOUNT_V1 would be TRANSDATE,
+# containing the transaction date and time; however, in the current MMEX implementation
+# the time is reset to zero, which makes TRANSDATE (and also its combination with other
+# fields) inappropriate as a unique key. the choice of a unique key for BILLSDEPOSITS_V1
+# is less obvious; TRANSDATE is a rolling date and it is automatically updated, while the
 # introduction of a serial number defeats the purpose of not using rowid as a key.
 
 # since an input XLSX worksheet may contain entries for more than one MMEX tables,
 # a discrimination algorithm is needed in order to decide the table of each entry.
 # for this purpose, the fields of each MMEX table are classified into 5 classes:
-#   rowid, key, discriminator, defined, default
-# each table has a single "rowid" field. it must have at least one "key" field, or at
-# least one "discriminator" field. all "key" and "discriminator" fields must be non-empty.
-# the "defined" fields must be present in the XLSX worksheet, but may be empty.
+#   0: primary key, 1: key, 2: discriminator, 3: defined, 4: default
+# each table must have at least one "key" or "discriminator" field. all "key" and
+# "discriminator" fields must be present in the XLSX worksheet and be non-empty.
+# the "defined" fields must also be present in the XLSX worksheet, but may be empty.
 # the "default" fields have a default value and may not exist in the XLSX worksheet.
 # a row in the input XLSX worksheet is compared in turn with each MMEX table associated
 # with the worksheet, in a specified order, and it is matched to the first table for
 # which all "key" and "discriminator" fields are non-empty. if a "defined" field in
 # the matching table is missing, an error is printed and the import is aborted, while
 # missing "default" fields are assigned their default value. the specification of each
-# worksheet can be found in %i_sheet_sh below (see also the -i -hs* flag).
+# worksheet can be found in %i_sheet_sh below (see also the -i -hs* flags).
 
 # in the simplest case, the value of a database field is taken from a corresponding
 # column in the XLSX worksheet (often with the same or similar name). however, for
@@ -3478,7 +3490,7 @@ sub o_ws_write { my( $sheet, $ws, $format_a ) = @_;
 # $sheet   : (string) single-letter code of XLSX worksheet
 # $table   : (string) table name in MMEX database
 # $unique  : (boolean) table has unique vector of keys
-# $class   : 0: rowid, 1: key, 2: discriminator, 3: defined, 4: default
+# $class   : 0: primary key (omitted), 1: key, 2: discriminator, 3: defined, 4: default
 # $field   : (string) field name in MMEX table
 # $col_l   : (string) comma separated list of column names in XLSX worksheet
 # $type    : (string) type in MMEX database
@@ -3491,7 +3503,6 @@ my %i_sheet_sh = (
 
   i => [
     [ "INFOTABLE_V1", 1, [
-      [ 0, "INFOID" ],
       [ 1, "INFONAME",  "NAME",  "text", undef ], # UNIQUE
       [ 3, "INFOVALUE", "VALUE", "text", undef ],
     ] ],
@@ -3505,7 +3516,6 @@ my %i_sheet_sh = (
 
     # key: CURRENCY_SYMBOL
     [ "CURRENCYFORMATS_V1", 1, [
-      [ 0, "CURRENCYID" ],
       [ 3, "CURRENCY_TYPE",   "TYPE",    "text",    "choice", "Fiat, Crypto" ],
       [ 1, "CURRENCY_SYMBOL", "SYMBOL",  "text",    undef ], # UNIQUE
       [ 2, "CURRENCYNAME",    "NAME",    "text",    undef ], # UNIQUE
@@ -3523,7 +3533,6 @@ my %i_sheet_sh = (
     # {{{ CURRENCYHISTORY_V1
 
     [ "CURRENCYHISTORY_V1", 1, [
-      [ 0, "CURRHISTID" ],
       [ 1, "CURRENCYID",  undef,       "id",      "def last_id", 0 ], # UNIQUE(1)
       [ 1, "CURRDATE",    "HIST_DATE", "text",    undef ],            # UNIQUE(2)
       [ 3, "CURRUPDTYPE", "UPDATE",    "id",      "key_id" ],
@@ -3540,7 +3549,6 @@ my %i_sheet_sh = (
     # {{{ ACCOUNTLIST_V1
 
     [ "ACCOUNTLIST_V1", 1, [
-      [ 0, "ACCOUNTID" ],
       [ 2, "ACCOUNTTYPE",     "TYPE",          "text",    "choice",
         "Cash, Checking, Credit Card, Loan, Term, Investment, Asset, Shares"
       ],
@@ -3575,7 +3583,6 @@ my %i_sheet_sh = (
     # {{{ ATTACHMENT_V1
 
     [ "ATTACHMENT_V1", 0, [
-      [ 0, "ATTACHMENTID" ],
       [ 1, "REFTYPE",     undef,         "text", "def", "BankAccount" ],
       [ 1, "REFID",       undef,         "id",   "def last_id", 0 ],
       [ 3, "DESCRIPTION", "ATTACH_DESC", "text", undef ],
@@ -3592,7 +3599,6 @@ my %i_sheet_sh = (
     # {{{ ASSETS_V1
 
     [ "ASSETS_V1", 0, [
-      [ 0, "ASSETID" ],
       [ 2, "ASSETTYPE",       "TYPE",        "text",    "choice",
         "Property, Automobile, Household Object, Art, Jewellery, Cash, Other"
       ],
@@ -3615,7 +3621,6 @@ my %i_sheet_sh = (
     # {{{ ATTACHMENT_V1
 
     [ "ATTACHMENT_V1", 0, [
-      [ 0, "ATTACHMENTID" ],
       [ 1, "REFTYPE",     undef,         "text", "def", "Asset" ],
       [ 1, "REFID",       undef,         "id",   "def last_id", 0 ],
       [ 3, "DESCRIPTION", "ATTACH_DESC", "text", undef ],
@@ -3632,7 +3637,6 @@ my %i_sheet_sh = (
     # {{{ STOCK_V1
 
     [ "STOCK_V1", 0, [
-      [ 0, "STOCKID" ],
       [ 2, "HELDAT",        "ACCOUNT",    "id",      "key_id" ],
       [ 2, "SYMBOL",        "SYMBOL",     "text",    undef ],
       [ 1, "STOCKNAME",     "NAME",       "text",    undef ],
@@ -3649,7 +3653,6 @@ my %i_sheet_sh = (
     # {{{ ATTACHMENT_V1
 
     [ "ATTACHMENT_V1", 0, [
-      [ 0, "ATTACHMENTID" ],
       [ 1, "REFTYPE",     undef,         "text", "def", "Stock" ],
       [ 1, "REFID",       undef,         "id",   "def last_id", 0 ],
       [ 3, "DESCRIPTION", "ATTACH_DESC", "text", undef ],
@@ -3666,7 +3669,6 @@ my %i_sheet_sh = (
     # {{{ STOCKHISTORY_V1
 
     [ "STOCKHISTORY_V1", 1, [
-      [ 0, "HISTID" ],
       [ 1, "SYMBOL",  "SYMBOL", "text",    undef ], # UNIQUE(1)
       [ 1, "DATE",    "DATE",   "text",    undef ], # UNIQUE(2)
       [ 3, "UPDTYPE", "UPDATE", "id",      "key_id" ],
@@ -3681,7 +3683,6 @@ my %i_sheet_sh = (
 
   c => [
     [ "CATEGORY_V1", 1, [
-      [ 0, "CATEGID" ],
       [ 1, "PARENTID",  "PATH",   "id",      "path_pid" ],  # UNIQUE(2)
       [ 1, "CATEGNAME", "PATH",   "text",    "path_name" ], # UNIQUE(1)
       [ 4, "ACTIVE",    "ACTIVE", "integer", "def", 1 ],
@@ -3695,7 +3696,6 @@ my %i_sheet_sh = (
     # {{{ PAYEE_V1
 
     [ "PAYEE_V1", 1, [
-      [ 0, "PAYEEID" ],
       [ 1, "PAYEENAME", "NAME",     "text",    undef ], # UNIQUE
       [ 4, "NOTES",     "NOTES",    "text",    "def", "" ],
       [ 4, "ACTIVE",    "ACTIVE",   "integer", "def", 1 ],
@@ -3709,7 +3709,6 @@ my %i_sheet_sh = (
     # {{{ ATTACHMENT_V1
 
     [ "ATTACHMENT_V1", 0, [
-      [ 0, "ATTACHMENTID" ],
       [ 1, "REFTYPE",     undef,         "text", "def", "Payee" ],
       [ 1, "REFID",       undef,         "id",   "def last_id", 0 ],
       [ 3, "DESCRIPTION", "ATTACH_DESC", "text", undef ],
@@ -3724,7 +3723,6 @@ my %i_sheet_sh = (
 
   g => [
     [ "TAG_V1", 1, [
-      [ 0, "TAGID" ],
       [ 1, "TAGNAME", "NAME",   "text",    undef ], # UNIQUE
       [ 4, "ACTIVE",  "ACTIVE", "integer", "def", 1 ],
     ] ],
@@ -3735,7 +3733,6 @@ my %i_sheet_sh = (
 
   f => [
     [ "CUSTOMFIELD_V1", 0, [
-      [ 0, "FIELDID" ],
       [ 2, "REFTYPE",     "REF_TYPE",   "text", "choice",
         "Transaction, Stock, Asset, BankAccount, RecurringTransaction, Payee, " .
         "TransactionSplit, RecurringTransactionSplit"
@@ -3754,7 +3751,6 @@ my %i_sheet_sh = (
   t => [
     # {{{ CHECKINGACCOUNT_V1
     [ "CHECKINGACCOUNT_V1", 0, [
-      [ 0, "TRANSID" ],
       [ 2, "TRANSDATE",         "DATE",         "text",    "date0" ],
       [ 4, "TRANSACTIONNUMBER", "NUMBER",       "text",    "def", "" ],
       [ 3, "STATUS",            "STATUS",       "text",    "choice", ", R, V, F, D" ],
@@ -3781,7 +3777,6 @@ my %i_sheet_sh = (
     # {{{ SPLITTRANSACTIONS_V1
 
     [ "SPLITTRANSACTIONS_V1", 0, [
-      [ 0, "SPLITTRANSID" ],
       [ 2, "TRANSID",          undef,      "id",      "def last_id", 0 ],
       [ 2, "CATEGID",          "CATEGORY", "id",      "req key_id" ],
       [ 4, "NOTES",            "NOTES",    "text",    "def", "" ],
@@ -3792,7 +3787,6 @@ my %i_sheet_sh = (
     # {{{ TRANSLINK_V1 (LINKTYPE=Asset)
 
     [ "TRANSLINK_V1", 0, [
-      [ 0, "TRANSLINKID" ],
       [ 2, "CHECKINGACCOUNTID", undef, "id",   "def last_id", 0 ],
       [ 2, "LINKTYPE",          undef, "text", "def", "Asset" ],
       [ 2, "LINKRECORDID",
@@ -3805,7 +3799,6 @@ my %i_sheet_sh = (
     # {{{ TRANSLINK_V1 (LINKTYPE=Stock)
 
     [ "TRANSLINK_V1", 0, [
-      [ 0, "TRANSLINKID" ],
       [ 2, "CHECKINGACCOUNTID", undef, "id",   "def last_id", 0 ],
       [ 2, "LINKTYPE",          undef, "text", "def", "Stock" ],
       [ 2, "LINKRECORDID",
@@ -3818,7 +3811,6 @@ my %i_sheet_sh = (
     # {{{ SHAREINFO_V1
 
     [ "SHAREINFO_V1", 0, [
-      [ 0, "SHAREINFOID" ],
       [ 2, "CHECKINGACCOUNTID", undef,              "id",      "def last_id", 0 ],
       [ 2, "SHARENUMBER",       "SHARE_NUMBER",     "numeric", undef ],
       [ 2, "SHAREPRICE",        "SHARE_PRICE",      "numeric", undef ],
@@ -3831,7 +3823,6 @@ my %i_sheet_sh = (
 
     # note: last_id 1  is checked before last_id 0
     [ "TAGLINK_V1", 1, [
-      [ 0, "TAGLINKID" ],
       [ 1, "REFTYPE", undef, "text", "def", "TransactionSplit" ], # UNIQUE(1)
       [ 1, "REFID",   undef, "id",   "def last_id", 1 ],          # UNIQUE(2)
       [ 1, "TAGID",   "TAG", "id",   "req key_id" ],              # UNIQUE(3)
@@ -3841,7 +3832,6 @@ my %i_sheet_sh = (
     # {{{ TAGLINK_V1 (REFTYPE=Transaction)
 
     [ "TAGLINK_V1", 1, [
-      [ 0, "TAGLINKID" ],
       [ 1, "REFTYPE", undef, "text", "def", "Transaction" ], # UNIQUE(1)
       [ 1, "REFID",   undef, "id",   "def last_id", 0 ],     # UNIQUE(2)
       [ 1, "TAGID",   "TAG", "id",   "req key_id" ],         # UNIQUE(3)
@@ -3851,7 +3841,6 @@ my %i_sheet_sh = (
     # {{{ CUSTOMFIELDDATA_V1
 
     [ "CUSTOMFIELDDATA_V1", 1, [
-      [ 0, "FIELDATADID" ],
       [ 1, "REFID",   undef,     "id",   "def last_id", 0 ],  # UNIQUE(2)
       [ 1, "FIELDID", "FIELD",   "id",   "nkey_id" ],         # UNIQUE(1)
       [ 3, "CONTENT", "CONTENT", "text", undef ],
@@ -3861,7 +3850,6 @@ my %i_sheet_sh = (
     # {{{ ATTACHMENT_V1
 
     [ "ATTACHMENT_V1", 0, [
-      [ 0, "ATTACHMENTID" ],
       [ 1, "REFTYPE",     undef,         "text", "def", "Transaction" ],
       [ 1, "REFID",       undef,         "id",   "def last_id", 0 ],
       [ 3, "DESCRIPTION", "ATTACH_DESC", "text", undef ],
@@ -3878,7 +3866,6 @@ my %i_sheet_sh = (
     # {{{ BILLSDEPOSITS_V1
 
     [ "BILLSDEPOSITS_V1", 0, [
-      [ 0, "BDID" ],
       [ 2, "TRANSDATE",          "DATE",        "text",    "date0" ],
       [ 4, "NEXTOCCURRENCEDATE",
         "NEXT_DATE, DATE",
@@ -3910,7 +3897,6 @@ my %i_sheet_sh = (
     # {{{ BUDGETSPLITTRANSACTIONS_V1
 
     [ "BUDGETSPLITTRANSACTIONS_V1", 0, [
-      [ 0, "SPLITTRANSID" ],
       [ 2, "TRANSID",          undef,      "id",      "def last_id", 0 ],
       [ 2, "CATEGID",          "CATEGORY", "id",      "req key_id" ],
       [ 4, "NOTES",            "NOTES",    "text",    "def", "" ],
@@ -3922,7 +3908,6 @@ my %i_sheet_sh = (
 
     # note: last_id 1  is checked before last_id 0
     [ "TAGLINK_V1", 1, [
-      [ 0, "TAGLINKID" ],
       [ 1, "REFTYPE", undef, "text", "def", "RecurringTransactionSplit" ], # UNIQUE(1)
       [ 1, "REFID",   undef, "id",   "def last_id", 1 ],                   # UNIQUE(2)
       [ 1, "TAGID",   "TAG", "id",   "req key_id" ],                       # UNIQUE(3)
@@ -3932,7 +3917,6 @@ my %i_sheet_sh = (
     # {{{ TAGLINK_V1 (REFTYPE=RecurringTransaction)
 
     [ "TAGLINK_V1", 1, [
-      [ 0, "TAGLINKID" ],
       [ 1, "REFTYPE", undef, "text", "def", "RecurringTransaction" ], # UNIQUE(1)
       [ 1, "REFID",   undef, "id",   "def last_id", 0 ],              # UNIQUE(2)
       [ 1, "TAGID",   "TAG", "id",   "req key_id" ],                  # UNIQUE(3)
@@ -3942,7 +3926,6 @@ my %i_sheet_sh = (
     # {{{ CUSTOMFIELDDATA_V1
 
     [ "CUSTOMFIELDDATA_V1", 1, [
-      [ 0, "FIELDATADID" ],
       [ 1, "REFID",   undef,     "idn",  "def last_idn", 0 ],  # UNIQUE(2)
       [ 1, "FIELDID", "FIELD",   "id",   "nkey_id" ],          # UNIQUE(1)
       [ 3, "CONTENT", "CONTENT", "text", undef ],
@@ -3952,7 +3935,6 @@ my %i_sheet_sh = (
     # {{{ ATTACHMENT_V1
 
     [ "ATTACHMENT_V1", 0, [
-      [ 0, "ATTACHMENTID" ],
       [ 1, "REFTYPE",     undef,         "text", "def", "RecurringTransaction" ],
       [ 1, "REFID",       undef,         "id",   "def last_id", 0 ],
       [ 3, "DESCRIPTION", "ATTACH_DESC", "text", undef ],
@@ -3967,7 +3949,6 @@ my %i_sheet_sh = (
 
   y => [
     [ "BUDGETYEAR_V1", 1, [
-      [ 0, "BUDGETYEARID" ],
       [ 1, "BUDGETYEARNAME", "NAME", "text", undef ], # UNIQUE
     ] ],
   ],
@@ -3978,7 +3959,6 @@ my %i_sheet_sh = (
   b => [
     # key: (BUDGETYEARID, CATEGID)
     [ "BUDGETTABLE_V1", 0, [
-      [ 0, "BUDGETENTRYID" ],
       [ 1, "BUDGETYEARID", "YEAR",     "id",      "req key_id" ],
       [ 1, "CATEGID",      "CATEGORY", "id",      "req key_id" ],
       [ 4, "NOTES",        "NOTES",    "text",    "def", "" ],
@@ -3997,7 +3977,6 @@ my %i_sheet_sh = (
 
   r => [
     [ "REPORT_V1", 1, [
-      [ 0, "REPORTID" ],
       [ 1, "REPORTNAME",      "NAME",        "text",    undef ], # UNIQUE
       [ 3, "GROUPNAME",       "GROUP_NAME",  "text",    undef ],
       [ 4, "ACTIVE",          "ACTIVE",      "integer", "def", 1 ],
@@ -4015,7 +3994,7 @@ my %i_sheet_sh = (
 my %i_sheet_table_a = ();  # ( $sheet => [ $table, ... ] )
 my %i_table_index   = ();  # ( $table => [ [ $sheet_i, $table_i, ... ], ... ] )
 my %i_table_sheet_a = ();  # ( $table => [ $sheet, ... ] )
-my %i_table_sh      = ();  # ( $table => [ $unique, $rowid, [ $key, ... ] )
+my %i_table_sh      = ();  # ( $table => [ $unique, [ $key, ... ] )
 my @i_table_va      = ();  # ( $table, ... )
 
 # {{{ %i_sheet_table_a
@@ -4066,7 +4045,7 @@ for my $table ( keys %i_table_index ) {
 # {{{ %i_table_sh
 
 for my $table ( keys %i_table_index ) {
-  my( $unique, $rowid, $key_l );
+  my( $unique, $key_l );
   my @key_a = ();
 
   SHEET: for ( @{ $i_table_index{$table} } ) {
@@ -4093,32 +4072,17 @@ for my $table ( keys %i_table_index ) {
       }
 
       # }}}
-      # {{{ $rowid1, @key1_a, $key1_l
+      # {{{ @key1_a, $key1_l
 
-      my $rowid1;
       my @key1_a = ();
-
       for my $field_s ( @$field_sa ) {
         my( $class, $field ) = @$field_s;
-        if( $class == 0 && ! defined $rowid1 ) {
-          $rowid1 = $field;
-        } elsif( $class == 0 ) {
-          log_checkf( ": i_table_sh: $sheet.$table_i has more than one rowid\n" );
-        } elsif( $class == 1 ) {
+        if( $class == 1 ) {
           push( @key1_a, $field );
         }
       }
 
       my $key1_l = join( ", ", sort @key1_a );
-
-      # }}}
-      # {{{ $rowid: all $table_s of $table must have the same $rowid
-
-      if( ! defined $rowid ) {
-        $rowid = $rowid1;
-      } elsif( $rowid1 ne $rowid ) {
-        log_checkf( ": i_table_sh: $sheet.$table_i has rowid $rowid1 != $rowid\n" );
-      }
 
       # }}}
       # {{{ @key_a, $key_l: all $table_s of $table must have the same sorted @key_a
@@ -4133,10 +4097,10 @@ for my $table ( keys %i_table_index ) {
       # }}}
     }
   }
-  # {{{ %i_table_sh: add $table => [ $unique, $rowid, \@key_a ]
+  # {{{ %i_table_sh: add $table => [ $unique, \@key_a ]
 
-  if( defined $unique && defined $rowid && defined $key_l ) {
-    $i_table_sh{$table} = [ $unique, $rowid, \@key_a ];
+  if( defined $unique && defined $key_l ) {
+    $i_table_sh{$table} = [ $unique, \@key_a ];
   } else {
     log_checkf( ": i_table_sh: cannot create spec for $table\n" );
   }
@@ -4161,12 +4125,12 @@ for my $table ( keys %i_table_index ) {
 # %i_req_sh : ( $sheet => \@table_s )
 
 # @table_s : ( 0: $map, 1: $table, 2: [ \@field_s, ... ] )
-# @field_s : ( 0: $class, 1: $field, 2: $type, 3: $value )
+# @field_s : ( 0: $class, 1: $field, 2? $type, 3? $value )
 
 # $sheet   : (string) single-letter code of XLSX worksheet
 # $map     : (string) map name
 # $table   : (string) table name in MMEX database
-# $class   : 0: rowid, 1: key, 4: default
+# $class   : 0: primary key (omited), 1: key, 4: default
 # $field   : (string) field name in MMEX table
 # $type    : (string) type in MMEX database
 # $value   : (string) value as in insert query
@@ -4176,9 +4140,8 @@ my %i_req_sh = (
   # {{{ c => CATEGORY
 
   c => [ "CATEGORY", "CATEGORY_V1", [
-    [ 0, "CATEGID"                   ],
-    [ 1, "PARENTID",  "id"           ], # UNIQUE(2)
-    [ 1, "CATEGNAME", "text"         ], # UNIQUE(1)
+    [ 1, "PARENTID",  "id" ],   # UNIQUE(2)
+    [ 1, "CATEGNAME", "text" ], # UNIQUE(1)
     [ 4, "ACTIVE",    "integer", "1" ],
   ] ],
 
@@ -4186,8 +4149,7 @@ my %i_req_sh = (
   # {{{ p => PAYEE
 
   p => [ "PAYEE", "PAYEE_V1", [
-    [ 0, "PAYEEID"                    ],
-    [ 1, "PAYEENAME", "text"          ], # UNIQUE
+    [ 1, "PAYEENAME", "text" ], # UNIQUE
     [ 4, "NOTES",     "text",    "''" ],
     [ 4, "ACTIVE",    "integer", "1"  ],
     [ 4, "NUMBER",    "text",    "''" ],
@@ -4200,8 +4162,7 @@ my %i_req_sh = (
   # {{{ g => TAG
 
   g => [ "TAG", "TAG_V1", [
-    [ 0, "TAGID"                   ],
-    [ 1, "TAGNAME", "text"         ], # UNIQUE
+    [ 1, "TAGNAME", "text" ], # UNIQUE
     [ 4, "ACTIVE",  "integer", "1" ],
   ] ],
 
@@ -4209,7 +4170,6 @@ my %i_req_sh = (
   # {{{ y => YEAR
 
   y => [ "YEAR", "BUDGETYEAR_V1", [
-    [ 0, "BUDGETYEARID"           ],
     [ 1, "BUDGETYEARNAME", "text" ], # UNIQUE
   ] ],
 
@@ -4247,12 +4207,12 @@ my $i_attach_f;    # (boolean) ATTACHMENT_V1 table has been modified
 # @field_saa : ( $class -> [ $field_s, ... ] ) field specs in each class
 
 # $table     : (string) table name in MMEX database
-# $last_id   : (integer or undef) last rowid (primary id) in table
-# $sel_0_1   : (DBI) select <rowid> from $table where <keys>
-# $sel_023_1 : (DBI) select <rowid>, <discr>, <defined> from $table where <keys>
-# $upd_23_0  : (DBI) update $table set <discr>, <defined> where <rowid>
-# $ins_01234 : (DBI) insert into $table( <rowid>, <keys>, <discr>, <defined>, <default> )
-# $class     : 0: rowid, 1: key, 2: discriminator, 3: defined, 4: default
+# $last_id   : (integer or undef) last rowid in table
+# $sel_0_1   : (DBI) select <pk> from $table where <keys>
+# $sel_023_1 : (DBI) select <pk>, <discr>, <defined> from $table where <keys>
+# $upd_23_0  : (DBI) update $table set <discr>, <defined> where <pk>
+# $ins_01234 : (DBI) insert into $table( <pk>, <keys>, <discr>, <defined>, <default> )
+# $class     : 0: pk, 1: key, 2: discriminator, 3: defined, 4: default
 # $field     : (string) field name in MMEX table
 # $field_s   : reference to $i_sheet_sh{$sheet}->[$table_i]->[2]->[$field_i]
 
@@ -4266,6 +4226,7 @@ my $i_attach_f;    # (boolean) ATTACHMENT_V1 table has been modified
 # if a field with default value exists in the worksheet, it is trasferred to class 3.
 # a worksheet row matches a table if all discriminator and key fields are non-empty
 # (notice that the set of discriminator and key fields is independent of $i_key_unique).
+# $field_aa[0] and $field_saa[0] are empty (the primary key is obtained from %m_table_pk).
 
 # }}}
 my @i_table_cache_sa;
@@ -4277,8 +4238,8 @@ my @i_table_cache_sa;
 # $map     : (string) map name
 # @req_s   : ( 0: $table, 1? $st_ins, 2? \@field_a )
 # $table   : (string) table name in MMEX database
-# $st_ins  : (DBI statement handle) insert into $table( <rowid>, <keys>, <default> )
-# @field_a : ( $field, ... ) rowid and key fields in table
+# $st_ins  : (DBI statement handle) insert into $table( <pk>, <keys>, <default> )
+# @field_a : ( $field, ... ) primary key and key fields in table
 
 # all requires worksheets (c, p, g, y) are backed by maps between id and key in cache.
 # @st_ins modifies the database; it does not exist in dry run mode.
@@ -4300,23 +4261,22 @@ sub i_req_prepare {
 
     my @req_s = ( $table );
     if( ! $dry_run ) {
-      my @f0 = (); my @v0 = ();
+      my $pk = $m_table_pk{$table};
       my @f1 = (); my @v1 = ();
       my @f4 = (); my @v4 = ();
       for my $field_s ( @$field_sa ) {
         my( $class, $field, $type, $value ) = @$field_s;
-        if( $class == 0 ) { push( @f0, $field ); push( @v0, "?" ); }
         if( $class == 1 ) { push( @f1, $field ); push( @v1, "?" ); }
         if( $class == 4 ) { push( @f4, $field ); push( @v4, $value ); }
       }
       my $query = "insert into $table( "
-        . join( ", ", ( @f0, @f1, @f4 ) )
+        . join( ", ", ( $pk, @f1, @f4 ) )
         . " )\nvalues( "
-        . join( ", ", ( @v0, @v1, @v4 ) )
+        . join( ", ", ( "?", @v1, @v4 ) )
         . " )";
       #log_debugf( ": query: $query\n" );
       my $st_ins = m_prepare( $query );
-      push( @req_s, $st_ins, [ @f0, @f1 ] );
+      push( @req_s, $st_ins, [ $pk, @f1 ] );
     }
 
     $i_req_cache_sh{$map} = \@req_s;
@@ -4456,12 +4416,12 @@ sub i_row_proc { my( $sheet, $row ) = @_;
     next TABLE unless defined $table_s;
     if( $match ) { $table_s->[1] = undef; next TABLE; }
     my( $table, undef, $st_s, $field_aa, $field_saa ) = @$table_s;
-    # {{{ $st_* ($st_s), $f[0-4] ($field_aa)
+    # {{{ $st_* ($st_s), $pk, $f[1-4] ($field_aa)
 
     my( $st_sel_0_1, $st_sel_023_1, $st_upd_23_0, $st_ins_01234 ) = @$st_s;
 
     # shorter variable names
-    my $f0 = $field_aa->[0];
+    my $pk = $m_table_pk{$table};
     my $f1 = $field_aa->[1];
     my $f2 = $field_aa->[2];
     my $f3 = $field_aa->[3];
@@ -4930,8 +4890,8 @@ sub i_row_proc { my( $sheet, $row ) = @_;
             }
 
             if( defined $st_upd_23_0 ) {
-              $field_value{ $f0->[0] } = $row1[0];
-              m_execute( $st_upd_23_0, [ @$f2, @$f3, $f0->[0] ], \%field_value );
+              $field_value{$pk} = $row1[0];
+              m_execute( $st_upd_23_0, [ @$f2, @$f3, $pk ], \%field_value );
               $i_attach_f = 1 if $table eq "ATTACHMENT_V1";
             }
 
@@ -4984,8 +4944,8 @@ sub i_row_proc { my( $sheet, $row ) = @_;
         }
 
         if( !$dry_run && defined $st_ins_01234 ) {
-          $field_value{$f0->[0]} = $rowid;
-          m_execute( $st_ins_01234, [ @$f0, @$f1, @$f2, @$f3, @$f4 ], \%field_value );
+          $field_value{$pk} = $rowid;
+          m_execute( $st_ins_01234, [ $pk, @$f1, @$f2, @$f3, @$f4 ], \%field_value );
           my $last_id = $m_db->last_insert_id();
           if( $rowid != $last_id ) {
             log_warn( "change of rowid: $rowid -> $last_id\n" );
@@ -5100,14 +5060,6 @@ sub i_ws_read { my( $sheet, $ws ) = @_;
     my @field_saa = ( [], [], [], [], [] );
     FIELD: for my $field_s ( @$field_sa ) {
       my( $class, $field, $col_l, $type, $op ) = @$field_s;
-      # {{{ if $class == 0: check that this is the first field of this class
-
-      if( $class == 0 && @{ $field_aa[$class] } > 0 ) {
-        log_checkf( ": $table has more than one rowid\n" );
-        next FIELD;
-      }
-
-      # }}}
       # {{{ $col_e: $col_l is defined and all columns in $col_l are known
 
       my $col_e;
@@ -5163,10 +5115,10 @@ sub i_ws_read { my( $sheet, $ws ) = @_;
     # {{{ @st_s
 
     my @st_s = ();
-    # {{{ $u (%i_sheet_u), $f[0-4] (@field_aa)
+    # {{{ $u (%i_sheet_u), $pk, $f[1-4] (@field_aa)
 
     my $u  = exists $i_sheet_u{$sheet};
-    my $f0 = $field_aa[0];
+    my $pk = $m_table_pk{$table};
     my $f1 = $field_aa[1];
     my $f2 = $field_aa[2];
     my $f3 = $field_aa[3];
@@ -5175,11 +5127,9 @@ sub i_ws_read { my( $sheet, $ws ) = @_;
     # }}}
     # {{{ sel_0_1
 
-    if( ! $u && @$f0 == 1 && @$f1 > 0 ) {
+    if( ! $u && @$f1 > 0 ) {
       my $w1 = join( " and ", map { "$_ = ?" } @$f1 );
-      my $sel_0_1 = "select "
-        . $f0->[0]
-        . "\nfrom $table\nwhere $w1";
+      my $sel_0_1 = "select $pk from $table\nwhere $w1";
       #log_debugf( ": sel_0_1: $sel_0_1\n" );
       push( @st_s, m_prepare( $sel_0_1 ) );
     } else {
@@ -5189,10 +5139,10 @@ sub i_ws_read { my( $sheet, $ws ) = @_;
     # }}}
     # {{{ sel_023_1
 
-    if( $u && @$f0 == 1 && @$f1 > 0 ) {
+    if( $u && @$f1 > 0 ) {
       my $w1 = join( " and ", map { "$_ = ?" } @$f1 );
       my $sel_023_1 = "select "
-        . join( ", ", ( @$f0, @$f2, @$f3 ) )
+        . join( ", ", ( $pk, @$f2, @$f3 ) )
         . "\nfrom $table\nwhere $w1";
       #log_debugf( ": sel_023_1: $sel_023_1\n" );
       push( @st_s, m_prepare( $sel_023_1 ) );
@@ -5203,11 +5153,11 @@ sub i_ws_read { my( $sheet, $ws ) = @_;
     # }}}
     # {{{ upd_23_0
 
-    if( ! $dry_run && $u && @$f0 == 1 && @$f1 > 0 && ( @$f2 > 0 || @$f3 > 0 ) ) {
+    if( ! $dry_run && $u && @$f1 > 0 && ( @$f2 > 0 || @$f3 > 0 ) ) {
 
       my $upd_23_0 = "update $table set "
         . join( ", ", map { "$_ = ?" } ( @$f2, @$f3 ) )
-        . "\nwhere " . $f0->[0] . " = ?";
+        . "\nwhere $pk = ?";
       #log_debugf( ": upd_23_0: $upd_23_0\n" );
       push( @st_s, m_prepare( $upd_23_0 ) );
 
@@ -5219,10 +5169,11 @@ sub i_ws_read { my( $sheet, $ws ) = @_;
     # {{{ ins_01234
 
     if( ! $dry_run ) {
+      my @f = ( $pk, @$f1, @$f2, @$f3, @$f4 );
       my $ins_01234 = "insert into $table( "
-        . join( ", ", ( @$f0, @$f1, @$f2, @$f3, @$f4 ) )
+        . join( ", ", @f )
         . " )\nvalues( "
-        . join( ", ", map { "?" } ( @$f0, @$f1, @$f2, @$f3, @$f4 ) )
+        . join( ", ", map { "?" } @f )
         . " )";
       #log_debugf( ": ins_01234: $ins_01234\n" );
       push( @st_s, m_prepare( $ins_01234 ) );
@@ -5280,7 +5231,7 @@ my $c_nkey_f;  # (boolean) check non-unique keys
 sub c_nkey {
   for my $table ( @i_table_va ) {
     my $table_s = $i_table_sh{$table};
-    my( $unique, $rowid, $key_a ) = @$table_s;
+    my( $unique, $key_a ) = @$table_s;
     next if $unique || @$key_a == 0;
 
     my $key_l = join( ", ", @$key_a );
@@ -5977,7 +5928,7 @@ program flags
     my $arg_ht = ( $cmd eq "o" ?
       '' :
       '
-  -hti : rowid (primary key) in each database table
+  -hti : primary key (rowid) in each database table
   -htk : key fields in each database table (depend on -ku)'
     );
 
@@ -5987,7 +5938,7 @@ program flags
     my $arg_hr = ( $cmd eq "o" ?
       '' :
       '
-  -hri : rowid (primary key) in each table with required names
+  -hri : primary key (rowid) in each table with required names
   -hrk : key fields in each table with required names'
     );
 
@@ -6310,17 +6261,15 @@ additional information
   # }}}
   # {{{ -i    -hri
 
-  # $sheet $table : $field, ... (rowid fields)
+  # $sheet $table : $pk
   elsif( $cmd eq "i" && $topic eq "ri" ) {
     my @w = ( 0 );
     for my $round ( 0, 1 ) { for my $sheet ( @i_req_va ) {
-      my $table_s = $i_req_sh{$sheet};
-      my( $map, $table, $field_sa ) = @$table_s;
-      my @field_a = map { $_->[1] } grep { $_->[0] == 0 } @$field_sa;
+      my $table = $i_req_sh{$sheet}->[1];
       if( $round == 0 ) {
         my $w0 = length( $table ); $w[0] = $w0 if $w[0] < $w0;
       } else {
-        printf $fh "%s %-$w[0]s : %s\n", $sheet, $table, join( ", ", @field_a );
+        printf $fh "%s %-$w[0]s : %s\n", $sheet, $table, $m_table_pk{$table};
       }
     } }
   }
@@ -6363,15 +6312,14 @@ additional information
   # }}}
   # {{{ -i    -hti
 
-  # $table : $rowid
+  # $table : $pk
   elsif( $cmd eq "i" && $topic eq "ti" ) {
     my @w = ( 0 );
     for my $round ( 0, 1 ) { for my $table ( @i_table_va ) {
-      my( $unique, $rowid, undef ) = @{ $i_table_sh{$table} };
       if( $round == 0 ) {
         my $w0 = length( $table ); $w[0] = $w0 if $w[0] < $w0;
       } else {
-        printf $fh "%-$w[0]s : %s\n", $table, $rowid ;
+        printf $fh "%-$w[0]s : %s\n", $table, $m_table_pk{$table};
       }
     } }
   }
@@ -6383,7 +6331,7 @@ additional information
   elsif( $cmd eq "i" && $topic eq "tk" ) {
     my @w = ( 0 );
     for my $round ( 0, 1 ) { for my $table ( @i_table_va ) {
-      my( $unique, undef, $key_a ) = @{ $i_table_sh{$table} };
+      my( $unique, $key_a ) = @{ $i_table_sh{$table} };
       next unless ( ! $i_key_unique || $unique ) && @$key_a;
       if( $round == 0 ) {
         my $w0 = length( $table ); $w[0] = $w0 if $w[0] < $w0;
